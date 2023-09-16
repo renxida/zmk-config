@@ -1,5 +1,34 @@
+
 on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@main
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - name: Setup GitHub CLI
+        uses: cli/cli@v2
+        
+      - name: Calculate new version
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          NEW_TAG="v$(echo $LATEST_TAG | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')"
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          
+      - name: Create git tag
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag ${{ env.NEW_TAG }}
+          git push origin ${{ env.NEW_TAG }}
+          
+      - name: Create GitHub Release
+        run: gh release create ${{ env.NEW_TAG }} .github/workflows/build.yml --title "Release ${{ env.NEW_TAG }}" --notes "Auto-generated release"
