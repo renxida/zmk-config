@@ -39,4 +39,4 @@ jobs:
           prerelease: false
           title: "Release ${{ env.NEW_TAG }}"
           files: |
-            build/artifacts/*
+            /home/runner/work/zmk-config/zmk-config/*
