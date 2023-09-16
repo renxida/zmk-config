@@ -6,26 +6,31 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: firmware # This should match the archive_name input in your build job
+
       - name: Calculate new version
         run: |
           git fetch --tags
           LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "v0.0.0")
           NEW_TAG="v$(echo $LATEST_TAG | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')"
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
-          
+
       - name: Create git tag
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git tag ${{ env.NEW_TAG }}
           git push origin ${{ env.NEW_TAG }}
-          
+
       - name: Create GitHub Release
         uses: marvinpinto/action-automatic-releases@latest
         with:
@@ -33,4 +38,5 @@ jobs:
           automatic_release_tag: "latest"
           prerelease: false
           title: "Release ${{ env.NEW_TAG }}"
-          files: ".github/workflows/build.yml"
+          files: |
+            build/artifacts/*
