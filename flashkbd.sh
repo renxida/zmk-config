@@ -5,8 +5,10 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEMP_DIR="/tmp/firmware_$TIMESTAMP"
 mkdir $TEMP_DIR
 
-# Step 1: Unzip firmware.zip to the unique timestamped folder
-unzip ~/Downloads/firmware.zip -d $TEMP_DIR
+
+# Step 1: Download and unzip firmware files to the unique timestamped folder
+wget -P $TEMP_DIR https://github.com/renxida/zmk-config/releases/download/latest/lily58_left-nice_nano_v2-zmk.uf2
+wget -P $TEMP_DIR https://github.com/renxida/zmk-config/releases/download/latest/lily58_right-nice_nano_v2-zmk.uf2
 
 # Step 2: Ensure NICENANO exists before proceeding with the copy
 while [ ! -d "/media/$USER/NICENANO" ]; do
@@ -35,6 +37,9 @@ cp $TEMP_DIR/*right-nice_nano*.uf2 "/media/$USER/NICENANO/"
 
 # Step 6: Cleanup
 rm -rf $TEMP_DIR
+<<<<<<< HEAD
 rm ~/Downloads/firmware.zip
+=======
+>>>>>>> 0f3df3a9726914b3f7e21bb76cd162260e290847
 
 echo "Script executed successfully."
