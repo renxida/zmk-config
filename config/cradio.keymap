@@ -1,0 +1,11 @@
+/* source keypos definitions */
+#include "../zmk-nodefree-config/keypos_def/keypos_34keys.h"
+
+/* activate bluetooth */
+#define CONFIG_WIRELESS 1
+
+/* source the main keymap */
+#include "base_cradio.keymap"
+
+/* use default transform for cradio */
+/ { chosen { zmk,matrix_transform = &default_transform; }; };
