@@ -1,0 +1,37 @@
+/* source key position labels */
+#include "zmk-helpers/key-labels/58.h"
+
+/* map the Lil58's extra keys */
+/*
+lily58 has one key each for [LR][TMBH].
+
+No MT, MM
+
+2 for MB
+
+For the H (thumb) row, we're considering the middle two keys of each hand as the keys in base and using 2 for mh and 1 each for LH and rh
+
+
+*/
+
+#define X_LT    &kp ESC
+#define X_RT    &kp BACKSLASH
+
+#define X_LM    &kp ESC
+#define X_RM    &none
+
+#define X_LB    &none
+#define X_MB    &none &none
+#define X_RB    &none \
+                &kp EQUAL &kp N1 &kp N2 &kp N3 &kp N4 &kp N5 &none   &none &kp N6 &kp N7 &kp N8 &kp N9 &kp N0 &kp MINUS \
+
+#define X_LH    &none
+#define X_MH    &none &none
+#define X_RH    &kp EQUAL
+
+/* activate bluetooth */
+#define CONFIG_WIRELESS 1
+
+/* source the main keymap */
+#include "base.keymap"
+
