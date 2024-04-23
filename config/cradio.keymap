@@ -4,6 +4,13 @@
 /* activate bluetooth */
 #define CONFIG_WIRELESS 1
 
+#ifndef LH_2
+#define LH_2
+#endif
+
+#ifndef RH_2
+#define RH_2
+#endif
 /* source the main keymap */
 #include "base.keymap"
 
