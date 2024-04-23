@@ -25,9 +25,9 @@ For the H (thumb) row, we're considering the middle two keys of each hand as the
 #define X_RB    &none \
                 &kp EQUAL &kp N1 &kp N2 &kp N3 &kp N4 &kp N5 &none   &none &kp N6 &kp N7 &kp N8 &kp N9 &kp N0 &kp MINUS \
 
-#define X_LH    &none
-#define X_MH    &none &none
-#define X_RH    &kp EQUAL
+#define X_LH    &none &none
+// no x_MH
+#define X_RH    &none &kp EQUAL
 
 /* activate bluetooth */
 #define CONFIG_WIRELESS 1
