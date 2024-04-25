@@ -1,5 +1,5 @@
 /* source key position labels */
-#include "zmk-helpers/key-labels/58.h"
+#include "zmk-helpers/key-labels/lily58.h"
 
 /* map the Lil58's extra keys */
 /*
