@@ -28,6 +28,7 @@
 #include <zephyr/drivers/uart/cdc_acm.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>  /* LOG_PANIC() */
 
 #if IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_NRF_GPREGRET)
 #include <hal/nrf_power.h>
