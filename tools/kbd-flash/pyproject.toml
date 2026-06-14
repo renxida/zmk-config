@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kbd-flash"
+version = "0.1.0"
+description = "Reset-free USB flashing for ZMK split keyboards (chip-id routed)"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+kbd-flash = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "kbd_flash", "sim", "real_platform"]

@@ -1,0 +1,315 @@
+#!/usr/bin/env python3
+"""kbd-flash-all: identify split-keyboard halves by chip ID and flash each the
+correct firmware over USB with no physical reset.
+
+The flow leans on two facts established during design:
+  * The running ZMK firmware exposes the nRF52840 FICR.DEVICEID as its USB
+    serial, and the Adafruit UF2 bootloader exposes the *same* chip ID as its
+    serial. So a half keeps one stable identity across running<->bootloader.
+  * A `usb-bootloader-touch` firmware feature reboots a half into the UF2
+    bootloader when the host opens its CDC port at 1200 baud.
+
+Routing is by chip ID via a calibration map (chip_id -> side); the firmware's
+advertised product string is only a fallback. We flash one half at a time
+(serialize the touches) so there is never more than one bootloader volume to
+disambiguate.
+
+All OS interaction goes through a Platform; the simulator implements the same
+interface, so this orchestrator is exercised end-to-end without hardware.
+"""
+from __future__ import annotations
+
+import abc
+import dataclasses
+import json
+import os
+from typing import Callable, Optional
+
+
+SIDES = ("left", "right")
+
+
+class FlashError(Exception):
+    """Recoverable orchestration failure (timeout, mis-route, unknown chip)."""
+
+
+def side_from_product(product: str) -> Optional[str]:
+    """Infer side from a USB product string, only if unambiguous. Returns
+    'left'/'right' or None when it can't tell."""
+    p = (product or "").lower()
+    is_left = any(s in p for s in (" l", "left", "_l", "-l"))
+    is_right = any(s in p for s in (" r", "right", "_r", "-r"))
+    if is_left and not is_right:
+        return "left"
+    if is_right and not is_left:
+        return "right"
+    return None
+
+
+def calibrate_from_devices(devices: list["Device"]) -> dict[str, str]:
+    """Build a chip_id -> side map from currently-running devices using their
+    product strings. Raises on ambiguity or a duplicated side so we never
+    persist a wrong calibration."""
+    mapping: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for d in devices:
+        side = side_from_product(d.product)
+        if side is None:
+            raise FlashError(
+                f"cannot calibrate chip {d.chip_id!r}: product {d.product!r} "
+                f"is ambiguous; calibrate one half at a time instead"
+            )
+        if side in seen:
+            raise FlashError(
+                f"two devices look like {side!r}: {seen[side]} and {d.chip_id}"
+            )
+        seen[side] = d.chip_id
+        mapping[d.chip_id] = side
+    return mapping
+
+
+@dataclasses.dataclass(frozen=True)
+class Device:
+    """A half currently enumerated as a running ZMK serial device."""
+
+    port: str
+    chip_id: str
+    product: str = ""
+
+
+@dataclasses.dataclass(frozen=True)
+class BootVol:
+    """A half currently in UF2 bootloader mode (mass-storage mounted)."""
+
+    mount: str
+    chip_id: str
+
+
+class Platform(abc.ABC):
+    """Everything the orchestrator needs from the OS, injectable for tests."""
+
+    @abc.abstractmethod
+    def discover_running(self) -> list[Device]: ...
+
+    @abc.abstractmethod
+    def discover_bootloaders(self) -> list[BootVol]: ...
+
+    @abc.abstractmethod
+    def touch_1200(self, port: str) -> None: ...
+
+    @abc.abstractmethod
+    def copy_uf2(self, src: str, mount: str) -> None: ...
+
+    @abc.abstractmethod
+    def sleep(self, seconds: float) -> None: ...
+
+    @abc.abstractmethod
+    def now(self) -> float: ...
+
+
+@dataclasses.dataclass
+class Timeouts:
+    bootloader: float = 30.0   # max wait for a half to reach bootloader
+    running: float = 45.0      # max wait for a half to re-enumerate running
+    unmount: float = 30.0      # max wait for a flash to be accepted (volume gone)
+    poll: float = 0.2          # poll interval for all waits
+
+
+class Orchestrator:
+    def __init__(
+        self,
+        platform: Platform,
+        firmware: dict[str, str],
+        calibration: dict[str, str],
+        timeouts: Optional[Timeouts] = None,
+        log: Optional[Callable[[str], None]] = None,
+    ):
+        # firmware: {'left':path,'right':path,'settings_reset':path}
+        missing = [k for k in ("left", "right", "settings_reset") if k not in firmware]
+        if missing:
+            raise ValueError(f"firmware missing keys: {missing}")
+        self.plat = platform
+        self.fw = firmware
+        self.calib = dict(calibration)  # chip_id -> side
+        self.t = timeouts or Timeouts()
+        self.log = log or (lambda m: None)
+
+    # --- identity / routing -------------------------------------------------
+    def resolve_side(self, dev: Device) -> str:
+        """Determine which physical side a device is. Calibration map wins;
+        product string is a fallback; otherwise we refuse to guess."""
+        if dev.chip_id in self.calib:
+            return self.calib[dev.chip_id]
+        side = side_from_product(dev.product)
+        if side is None:
+            raise FlashError(
+                f"cannot determine side for chip {dev.chip_id!r} "
+                f"(product={dev.product!r}); calibrate first"
+            )
+        return side
+
+    # --- generic wait helper ------------------------------------------------
+    def _wait(self, predicate: Callable[[], Optional[object]], timeout: float, what: str):
+        deadline = self.plat.now() + timeout
+        while True:
+            val = predicate()
+            if val is not None and val is not False:
+                return val
+            if self.plat.now() >= deadline:
+                raise FlashError(f"timed out after {timeout}s waiting for {what}")
+            self.plat.sleep(self.t.poll)
+
+    def _running_for(self, chip_id: str) -> Optional[Device]:
+        for d in self.plat.discover_running():
+            if d.chip_id == chip_id:
+                return d
+        return None
+
+    def _bootloader_mounts(self) -> set:
+        return {v.mount for v in self.plat.discover_bootloaders()}
+
+    def _new_bootloader(self, foreign: set) -> Optional[BootVol]:
+        """A bootloader volume that is NOT one of the `foreign` mounts (those
+        belong to other halves — possibly a prior half stuck in bootloader —
+        and must never be flashed by this half)."""
+        for v in self.plat.discover_bootloaders():
+            if v.mount not in foreign:
+                return v
+        return None
+
+    # --- per-half flash -----------------------------------------------------
+    def flash_one(self, dev: Device, side: str, wipe_bt: bool) -> None:
+        # Identify the bootloader by "the volume that newly appears after we
+        # touch THIS port" rather than by matching chip ids across running and
+        # bootloader modes — the nRF hwinfo serial and the Adafruit bootloader
+        # serial may format the device id differently. `foreign` = bootloaders
+        # already present before we touched this half (stale/other devices); we
+        # never flash those. Serialized flashing means our device is the only
+        # non-foreign bootloader, even across the settings_reset re-present and
+        # a NICENANO/NICENANO-1 remount.
+        cid = dev.chip_id
+        foreign = self._bootloader_mounts()
+        self.log(f"[{side}] {cid}: touch 1200 on {dev.port}")
+        self.plat.touch_1200(dev.port)
+
+        vol = self._wait(lambda: self._new_bootloader(foreign), self.t.bootloader,
+                         f"{side} bootloader")
+
+        if wipe_bt:
+            self.log(f"[{side}] {cid}: flashing settings_reset (wipe BT)")
+            mount = vol.mount
+            self.plat.copy_uf2(self.fw["settings_reset"], mount)
+            self._wait(lambda: mount not in self._bootloader_mounts(), self.t.unmount,
+                       f"{side} settings_reset to be accepted")
+            vol = self._wait(lambda: self._new_bootloader(foreign), self.t.bootloader,
+                             f"{side} bootloader to return after reset")
+
+        self.log(f"[{side}] {cid}: flashing cradio_{side}")
+        mount = vol.mount
+        self.plat.copy_uf2(self.fw[side], mount)
+        self._wait(lambda: mount not in self._bootloader_mounts(), self.t.unmount,
+                   f"{side} firmware to be accepted")
+
+        run = self._wait(lambda: self._running_for(cid), self.t.running,
+                         f"{side} to re-enumerate running")
+        got = self.resolve_side(run)
+        if got != side:
+            raise FlashError(
+                f"[{side}] {cid}: post-flash identity is {got!r} — mis-routed!"
+            )
+        # Independent cross-check: the re-enumerated firmware's OWN product
+        # string must also agree. With calibration the resolve_side() above is
+        # deterministic from cid, so this is what actually catches a wrong-image
+        # flash (right half ended up running cradio_right but we wanted left).
+        prod_side = side_from_product(run.product)
+        if prod_side is not None and prod_side != side:
+            raise FlashError(
+                f"[{side}] {cid}: flashed firmware advertises {prod_side!r} "
+                f"(product={run.product!r}) — wrong image flashed!"
+            )
+        self.log(f"[{side}] {cid}: OK (running, product={run.product!r})")
+
+    def discover_stable(self, window: Optional[float] = None) -> list[Device]:
+        """Discover running halves, debounced against transient USB-enumeration
+        flap by accumulating the union of devices seen over a short settle
+        window. Raises on a same-poll chip-id collision (an identity bug we
+        must not paper over by flashing blindly)."""
+        window = window if window is not None else min(3.0, self.t.bootloader)
+        deadline = self.plat.now() + window
+        by_id: dict[str, Device] = {}
+        while True:
+            devs = self.plat.discover_running()
+            ids = [d.chip_id for d in devs]
+            if len(set(ids)) != len(ids):
+                raise FlashError(f"chip-id collision among running devices: {ids}")
+            for d in devs:
+                by_id[d.chip_id] = d  # latest wins; union absorbs flap
+            if self.plat.now() >= deadline:
+                break
+            self.plat.sleep(self.t.poll)
+        return list(by_id.values())
+
+    # --- top level ----------------------------------------------------------
+    def flash_all(self, wipe_bt: bool = True, dry_run: bool = False) -> dict[str, str]:
+        devices = self.discover_stable()
+        if not devices:
+            raise FlashError("no keyboard halves found over USB")
+
+        # Resolve sides up front so a routing failure aborts before we touch
+        # anything (don't leave a half stranded in the bootloader).
+        plan: list[tuple[Device, str]] = []
+        seen_sides: dict[str, str] = {}
+        for d in devices:
+            side = self.resolve_side(d)
+            if side in seen_sides:
+                raise FlashError(
+                    f"two devices both resolve to {side!r}: "
+                    f"{seen_sides[side]} and {d.chip_id}"
+                )
+            seen_sides[side] = d.chip_id
+            plan.append((d, side))
+
+        if dry_run:
+            results = {}
+            for dev, side in plan:
+                self.log(f"[dry-run] {side}: would flash chip {dev.chip_id} on "
+                         f"{dev.port} (fw={os.path.basename(self.fw[side])}, "
+                         f"wipe_bt={wipe_bt})")
+                results[side] = "dry-run"
+            return results
+
+        results: dict[str, str] = {}
+        for dev, side in plan:
+            try:
+                self.flash_one(dev, side, wipe_bt)
+                results[side] = "ok"
+            except FlashError as e:
+                results[side] = f"FAILED: {e}"
+                self.log(str(e))
+        return results
+
+
+# --- firmware discovery ----------------------------------------------------
+def find_firmware(fw_dir: str) -> dict[str, str]:
+    """Map side -> newest matching .uf2 in fw_dir."""
+    out: dict[str, str] = {}
+    if not os.path.isdir(fw_dir):
+        return out
+    files = [f for f in os.listdir(fw_dir) if f.endswith(".uf2")]
+    for key, needle in (("left", "left"), ("right", "right"),
+                        ("settings_reset", "settings_reset")):
+        cands = sorted(
+            (f for f in files if needle in f),
+            key=lambda f: os.path.getmtime(os.path.join(fw_dir, f)),
+            reverse=True,
+        )
+        if cands:
+            out[key] = os.path.join(fw_dir, cands[0])
+    return out
+
+
+def load_calibration(path: str) -> dict[str, str]:
+    if path and os.path.exists(path):
+        with open(path) as fh:
+            return json.load(fh)
+    return {}

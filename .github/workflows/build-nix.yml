@@ -5,6 +5,8 @@ on:
     paths:
       - config/**
       - build.yaml
+      - zmk_modules/**
+      - .github/workflows/build-nix.yml
 
 jobs:
   build:

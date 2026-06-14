@@ -1,0 +1,40 @@
+# Copyright (c) 2026 Cedar Ren
+# SPDX-License-Identifier: MIT
+
+config USB_BOOTLOADER_TOUCH
+	bool "Enter UF2 bootloader on 1200-baud USB CDC touch"
+	depends on USB_DEVICE_STACK
+	select USB_CDC_ACM
+	select CDC_ACM_DTE_RATE_CALLBACK_SUPPORT
+	select REBOOT
+	help
+	  Watch the CDC ACM UART chosen by `zmk,bootloader-touch-uart` and, when
+	  the host opens it at 1200 baud, reboot into the UF2 bootloader. Lets a
+	  host flash the board over USB with no physical reset (the running
+	  firmware must already contain this feature; first install still needs a
+	  manual reset). Detection is event-driven via the dwDTERate callback.
+
+if USB_BOOTLOADER_TOUCH
+
+config USB_BOOTLOADER_TOUCH_NRF_GPREGRET
+	bool "Enter the bootloader by writing the UF2 magic to nRF GPREGRET directly"
+	depends on SOC_COMPATIBLE_NRF52X
+	default y
+	help
+	  On nRF52 (nice!nano etc.), write the Adafruit UF2 DFU magic (0x57) to
+	  GPREGRET[0] before reboot instead of going through the retention
+	  boot_mode subsystem. This is what the mapper ultimately does and is
+	  deterministic even when CONFIG_RETENTION_BOOT_MODE is not enabled.
+
+config USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT
+	bool "Detect-only (do not reboot) — for native_sim/unit tests"
+	default n
+	help
+	  On builds without RETENTION_BOOT_MODE (native_sim), skip the final
+	  sys_reboot so the detection can be observed by a test harness.
+
+module = USB_BOOTLOADER_TOUCH
+module-str = usb_bootloader_touch
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # USB_BOOTLOADER_TOUCH
