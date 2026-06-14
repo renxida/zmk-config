@@ -18,8 +18,29 @@ the correct firmware and BT cleared, no physical reset. Two pieces:
 - [x] **End-to-end firmware test passes** (`tests/native_sim/run_test.sh`):
       native_sim + usbip, host 1200-baud open → "1200-baud touch detected →
       entering UF2 bootloader". 9600 negative control ignored.
-- [x] Host orchestrator + device simulator: 13 tests incl 400-trial fuzz.
-- [x] Linux RealPlatform + parser unit tests. Total host tests: 18 green.
+- [x] Host orchestrator + device simulator: 30 tests incl 1500-trial fuzz.
+- [x] Linux RealPlatform + parser unit tests.
+- [x] **CI ARM compile-check GREEN** — module builds into real cradio_left/right
+      via zmk-usb-logging snippet + ZMK_EXTRA_MODULES (exercises the real
+      RETENTION_BOOT_MODE/GPREGRET reboot path). settings_reset untouched.
+- [x] CLI: `list` / `calibrate` / `flash` (+ `--sim`); calibration builder.
+- [x] Hardening: debounced discovery (flap absorption), chip-id collision guard,
+      single-half support.
+- [x] **Bug found+fixed by fuzz**: bootloader detection by chip-id matching
+      could cross-contaminate (a prior half stuck in bootloader got the next
+      half's fw). Now: identify bootloader as the volume NOT present before we
+      touched THIS half (`foreign` exclusion) — also robust to NICENANO-1
+      double-mount. Regression test added.
+- [x] Step 3 config added (HWINFO + USB_DEVICE_SN -> running serial = chip id);
+      pending CI re-verify.
+
+## Key design decision
+Bootloader correlation does NOT rely on running-serial == bootloader-serial
+(nRF hwinfo vs Adafruit bootloader may format the device id with different byte
+order — UNVERIFIED on hw). Serialized flashing + "new/non-foreign volume after
+touch" sidesteps it. Running serial (= chip id via hwinfo) is only used for
+calibration (side mapping) and post-flash re-identification, where stability +
+uniqueness is all that's needed.
 
 ## Environment (already set up)
 - Zephyr 3.7.0 workspace at `~/zephyrproject`, venv `~/.venv-zephyr`.

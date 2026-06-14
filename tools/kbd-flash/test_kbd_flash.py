@@ -178,6 +178,19 @@ class Hardening(unittest.TestCase):
         with self.assertRaises(FlashError):
             orch(plat, {}).flash_all()
 
+    def test_stuck_bootloader_no_cross_contamination(self):
+        # Regression: left fails (settings_reset ignored) and gets stuck in the
+        # bootloader; flashing right must NOT write right's fw to left's volume.
+        l, r = make_pair(faults_l=FaultConfig(ignore_settings_reset=True))
+        plat = SimPlatform([l, r])
+        res = orch(plat, calib(l, r)).flash_all(wipe_bt=True)
+        self.assertTrue(res["left"].startswith("FAILED"))
+        self.assertEqual(res["right"], "ok")
+        # the crux: left half never received right firmware
+        self.assertFalse(any("cradio_right" in e for e in l.events),
+                         f"left contaminated with right fw: {l.events}")
+        self.assertEqual(r.flashed_side, "right")
+
     def test_single_half_still_works(self):
         # only the left half plugged in -> flash just it, no spurious right wait
         l = VirtualHalf("AAAA1111", "left", flashed_side="left")
@@ -188,7 +201,7 @@ class Hardening(unittest.TestCase):
 
 class Fuzz(unittest.TestCase):
     def test_random_delays_and_faults_preserve_invariants(self):
-        trials = 400
+        trials = 1500
         for seed in range(trials):
             rng = random.Random(seed)
             def rfault():

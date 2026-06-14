@@ -159,38 +159,55 @@ class Orchestrator:
                 raise FlashError(f"timed out after {timeout}s waiting for {what}")
             self.plat.sleep(self.t.poll)
 
-    def _bootloader_for(self, chip_id: str) -> Optional[BootVol]:
-        for v in self.plat.discover_bootloaders():
-            if v.chip_id == chip_id:
-                return v
-        return None
-
     def _running_for(self, chip_id: str) -> Optional[Device]:
         for d in self.plat.discover_running():
             if d.chip_id == chip_id:
                 return d
         return None
 
+    def _bootloader_mounts(self) -> set:
+        return {v.mount for v in self.plat.discover_bootloaders()}
+
+    def _new_bootloader(self, foreign: set) -> Optional[BootVol]:
+        """A bootloader volume that is NOT one of the `foreign` mounts (those
+        belong to other halves — possibly a prior half stuck in bootloader —
+        and must never be flashed by this half)."""
+        for v in self.plat.discover_bootloaders():
+            if v.mount not in foreign:
+                return v
+        return None
+
     # --- per-half flash -----------------------------------------------------
     def flash_one(self, dev: Device, side: str, wipe_bt: bool) -> None:
+        # Identify the bootloader by "the volume that newly appears after we
+        # touch THIS port" rather than by matching chip ids across running and
+        # bootloader modes — the nRF hwinfo serial and the Adafruit bootloader
+        # serial may format the device id differently. `foreign` = bootloaders
+        # already present before we touched this half (stale/other devices); we
+        # never flash those. Serialized flashing means our device is the only
+        # non-foreign bootloader, even across the settings_reset re-present and
+        # a NICENANO/NICENANO-1 remount.
         cid = dev.chip_id
+        foreign = self._bootloader_mounts()
         self.log(f"[{side}] {cid}: touch 1200 on {dev.port}")
         self.plat.touch_1200(dev.port)
 
-        vol = self._wait(lambda: self._bootloader_for(cid), self.t.bootloader,
+        vol = self._wait(lambda: self._new_bootloader(foreign), self.t.bootloader,
                          f"{side} bootloader")
 
         if wipe_bt:
             self.log(f"[{side}] {cid}: flashing settings_reset (wipe BT)")
-            self.plat.copy_uf2(self.fw["settings_reset"], vol.mount)
-            self._wait(lambda: self._bootloader_for(cid) is None, self.t.unmount,
+            mount = vol.mount
+            self.plat.copy_uf2(self.fw["settings_reset"], mount)
+            self._wait(lambda: mount not in self._bootloader_mounts(), self.t.unmount,
                        f"{side} settings_reset to be accepted")
-            vol = self._wait(lambda: self._bootloader_for(cid), self.t.bootloader,
+            vol = self._wait(lambda: self._new_bootloader(foreign), self.t.bootloader,
                              f"{side} bootloader to return after reset")
 
         self.log(f"[{side}] {cid}: flashing cradio_{side}")
-        self.plat.copy_uf2(self.fw[side], vol.mount)
-        self._wait(lambda: self._bootloader_for(cid) is None, self.t.unmount,
+        mount = vol.mount
+        self.plat.copy_uf2(self.fw[side], mount)
+        self._wait(lambda: mount not in self._bootloader_mounts(), self.t.unmount,
                    f"{side} firmware to be accepted")
 
         run = self._wait(lambda: self._running_for(cid), self.t.running,
