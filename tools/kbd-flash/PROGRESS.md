@@ -85,6 +85,13 @@ ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
   it can't catch a wrong-image flash; the product check can). New sim fault
   `corrupt_flash_side` + regression test + added to fuzz. 39 tests green.
 
+## Loop iteration 5 — DONE
+- README.md (what it does, firmware+host flow, setup/udev/calibrate/flash, dev).
+- pyproject.toml: `kbd-flash` console_script (verified `pip install -e .` ->
+  `kbd-flash --sim list` works). egg-info gitignored.
+- 39 tests green. SOFTWARE COMPLETE — switching loop to long idle intervals;
+  only hardware-gated bench work remains (BENCH.md).
+
 ## Status: software side is feature-complete pending bench
 Firmware validated (native_sim+usbip + CI ARM incl GPREGRET path), orchestrator
 robust (39 tests, 1500-trial fuzz over 6 fault dimensions), CLI (list/calibrate/
