@@ -48,18 +48,23 @@ VERIFY: a `/dev/ttyACM*` appears (zmk-usb-logging CDC), and udev
 Writes ~/.config/kbd-flash/calibration.json (chip_id -> side).
 
 ## 4. THE TEST: USB-triggered bootloader, no physical reset
-Plug in ONE half. Manually trigger just the touch first to de-risk:
+Plug in ONE half. The watcher fires on a baud *change* to 1200, and the OS may
+set the rate on first open — so PRIME to another rate first:
 
-    stty -F /dev/ttyACM0 1200      # should drop the half into the UF2 bootloader
+    # Linux: stty -F /dev/ttyACM0 9600 ; stty -F /dev/ttyACM0 1200
+    # macOS: use mac_touch.sh (opens once, sets 9600 then 1200 via termios)
+    tools/kbd-flash/mac_touch.sh        # or kbd-flash's touch_1200 on Linux
+
+A bare `stty 1200` is a no-op change and will NOT trigger — confirmed on macOS.
 
 VERIFY ON HARDWARE (the parts native_sim could not):
-- [ ] After `stty 1200`, the half reboots and `NICENANO` mass-storage mounts
-      (this exercises the real GPREGRET=0x57 -> UF2 handoff).
-- [ ] `lsblk -o NAME,LABEL,MOUNTPOINT,SERIAL` shows the NICENANO volume; note
-      its serial (Adafruit bootloader's chip id) vs the running ID_SERIAL_SHORT
-      — RECORD whether they're byte-identical or reordered (informs whether
-      cross-mode chip-id matching could ever be re-enabled; current code does
-      NOT rely on it).
+- [ ] After the primed 9600->1200 touch, the half reboots and `NICENANO`
+      mass-storage mounts (exercises the real GPREGRET=0x57 -> UF2 handoff).
+      NOTE: the first hardware run reached the reboot but landed in normal fw —
+      the build had RETENTION_BOOT_MODE off so the magic was never written.
+      Fixed: nRF52 now writes 0x57 to GPREGRET[0] directly (run 27514396150+).
+- [x] Running serial vs bootloader serial: SETTLED — identical 16-hex, no byte
+      reorder (e.g. 8905AEEAAFB95703). The orchestrator does not rely on this.
 
 ## 5. Full automated flow
 Plug in BOTH halves, then:

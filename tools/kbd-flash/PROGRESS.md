@@ -92,6 +92,23 @@ ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
 - 39 tests green. SOFTWARE COMPLETE — switching loop to long idle intervals;
   only hardware-gated bench work remains (BENCH.md).
 
+## Hardware test #1 (real nRF52840 Cradio LEFT) — bug found + fixed
+- CONFIRMED on hw: CDC enumerates, 1200-baud touch IS detected + reboots, and
+  running serial == bootloader serial == 8905AEEAAFB95703 (identical, no
+  reorder — open question SETTLED).
+- BUG: reboot landed in NORMAL fw, not the bootloader. Build had
+  RETENTION_BOOT_MODE off -> module took #else -> bare sys_reboot, magic never
+  written. FIX: on SOC_COMPATIBLE_NRF52X write 0x57 to GPREGRET[0] directly via
+  nrf_power_gpregret_set (CONFIG_USB_BOOTLOADER_TOUCH_NRF_GPREGRET=y). Also
+  needed <zephyr/logging/log_ctrl.h> for LOG_PANIC (ZMK zephyr 4.1). Observable:
+  LOG_PANIC + 150ms before reboot. Green CI: run 27514396150.
+- Host: touch must PRIME 9600->1200 (macOS sets rate on first open so a bare
+  1200 is a no-op change). Fixed in mac_touch.sh + LinuxPlatform.touch_1200.
+- build-nix.yml now also triggers on zmk_modules/** (module changes were not
+  building before).
+- PENDING: Cedar reflashes left from run 27514396150 and re-tests reset-free
+  entry; right half still untouched.
+
 ## Status: software side is feature-complete pending bench
 Firmware validated (native_sim+usbip + CI ARM incl GPREGRET path), orchestrator
 robust (39 tests, 1500-trial fuzz over 6 fault dimensions), CLI (list/calibrate/
