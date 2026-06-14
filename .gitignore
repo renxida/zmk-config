@@ -1,8 +1,14 @@
 .build
 .direnv
 .west
-modules
-firmware
-zephyr
-zmk
+# west-workspace dirs, anchored to repo root so they don't shadow nested
+# paths like zmk_modules/*/zephyr/module.yml
+/modules
+/firmware
+/zephyr
+/zmk
 draw/base.yaml
+
+# python
+__pycache__/
+*.pyc

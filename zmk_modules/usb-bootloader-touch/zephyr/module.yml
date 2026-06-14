@@ -1,0 +1,4 @@
+name: usb-bootloader-touch
+build:
+  cmake: .
+  kconfig: Kconfig
