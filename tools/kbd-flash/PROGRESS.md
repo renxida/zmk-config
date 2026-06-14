@@ -78,13 +78,25 @@ ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
   marginal benefit. Revisit only if a bench test shows spurious triggers.
 - 38 host tests + 1500-trial fuzz + native_sim fw test green.
 
+## Loop iteration 4 — DONE
+- CI for per-side product (run 27511813516): GREEN.
+- verify-after-flash: added an INDEPENDENT product-string cross-check after
+  re-enumeration (resolve_side is deterministic-from-cid under calibration, so
+  it can't catch a wrong-image flash; the product check can). New sim fault
+  `corrupt_flash_side` + regression test + added to fuzz. 39 tests green.
+
+## Status: software side is feature-complete pending bench
+Firmware validated (native_sim+usbip + CI ARM incl GPREGRET path), orchestrator
+robust (39 tests, 1500-trial fuzz over 6 fault dimensions), CLI (list/calibrate/
+flash/--dry-run), udev mitigation, per-side identity, verify-after-flash, docs
+(BENCH.md, PROGRESS.md). Remaining work is HARDWARE-ONLY (needs Cedar + bench).
+
 ## Next steps (priority order)
-1. [ ] real_platform: verify-after-flash beyond re-enumeration (e.g. read back
-       the per-side product string to confirm the NEW fw booted, not a silent
-       copy_uf2 OSError-swallow). Mostly covered by the resolve_side check now
-       that products are per-side — tighten if a gap remains.
-2. [ ] Confirm CI green with per-side product (this push).
-3. [ ] Everything in "Hardware-only" below — needs Cedar + bench (see BENCH.md).
+1. [ ] Everything in "Hardware-only" below — needs Cedar + bench (see BENCH.md).
+2. [ ] Loop should avoid over-engineering (YAGNI): only add coverage/docs that
+       reflect a real, plausible failure mode — not busywork. Candidate small
+       wins if ideas arise: a tool README, packaging kbd-flash as an installable
+       entrypoint, deeper property-based fuzzing of timing races.
 
 ## Hardware-only (cannot test here, verify on bench)
 - The actual GPREGRET→UF2 handoff (native_sim has no retention reg).

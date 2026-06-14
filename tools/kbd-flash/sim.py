@@ -38,6 +38,7 @@ class FaultConfig:
     no_cdc_when_running: bool = False  # running half exposes no serial port
     ignore_settings_reset: bool = False  # settings_reset copy doesn't wipe/re-present
     flap_polls: int = 0           # hide from discover_running for the first N polls
+    corrupt_flash_side: bool = False  # cradio copy boots the OPPOSITE side (bad image)
 
 
 @dataclasses.dataclass
@@ -140,6 +141,8 @@ class SimPlatform(Platform):
         else:
             # cradio_<side> firmware
             side = "left" if "left" in base else "right" if "right" in base else "?"
+            if h.faults.corrupt_flash_side:
+                side = {"left": "right", "right": "left"}.get(side, side)
             h.flashed_side = side
             if h.faults.brick_on_flash:
                 h.state = GAP

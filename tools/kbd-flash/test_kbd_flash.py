@@ -199,6 +199,17 @@ class Hardening(unittest.TestCase):
                          f"left contaminated with right fw: {l.events}")
         self.assertEqual(r.flashed_side, "right")
 
+    def test_wrong_image_detected_by_product_crosscheck(self):
+        # The right firmware file actually contains the left image (boots as
+        # "Cradio L"). Calibration says this chip is right, so resolve_side is
+        # fine — but the product cross-check must catch the wrong image.
+        l, r = make_pair(faults_r=FaultConfig(corrupt_flash_side=True))
+        plat = SimPlatform([l, r])
+        res = orch(plat, calib(l, r)).flash_all(wipe_bt=False)
+        self.assertEqual(res["left"], "ok")
+        self.assertTrue(res["right"].startswith("FAILED"), res["right"])
+        self.assertIn("wrong image", res["right"])
+
     def test_single_half_still_works(self):
         # only the left half plugged in -> flash just it, no spurious right wait
         l = VirtualHalf("AAAA1111", "left", flashed_side="left")
@@ -229,6 +240,8 @@ class Fuzz(unittest.TestCase):
                     f.ignore_settings_reset = True
                 elif roll < 0.27:
                     f.no_cdc_when_running = True  # never enumerates -> undiscovered
+                elif roll < 0.32:
+                    f.corrupt_flash_side = True   # wrong image on disk
                 return f
 
             l, r = make_pair(faults_l=rfault(), faults_r=rfault())

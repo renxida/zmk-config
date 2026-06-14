@@ -217,6 +217,16 @@ class Orchestrator:
             raise FlashError(
                 f"[{side}] {cid}: post-flash identity is {got!r} — mis-routed!"
             )
+        # Independent cross-check: the re-enumerated firmware's OWN product
+        # string must also agree. With calibration the resolve_side() above is
+        # deterministic from cid, so this is what actually catches a wrong-image
+        # flash (right half ended up running cradio_right but we wanted left).
+        prod_side = side_from_product(run.product)
+        if prod_side is not None and prod_side != side:
+            raise FlashError(
+                f"[{side}] {cid}: flashed firmware advertises {prod_side!r} "
+                f"(product={run.product!r}) — wrong image flashed!"
+            )
         self.log(f"[{side}] {cid}: OK (running, product={run.product!r})")
 
     def discover_stable(self, window: Optional[float] = None) -> list[Device]:
