@@ -3,27 +3,18 @@
 
 config USB_BOOTLOADER_TOUCH
 	bool "Enter UF2 bootloader on 1200-baud USB CDC touch"
-	depends on SERIAL && UART_LINE_CTRL
+	depends on USB_DEVICE_STACK
+	select USB_CDC_ACM
+	select CDC_ACM_DTE_RATE_CALLBACK_SUPPORT
 	select REBOOT
 	help
 	  Watch the CDC ACM UART chosen by `zmk,bootloader-touch-uart` and, when
 	  the host opens it at 1200 baud, reboot into the UF2 bootloader. Lets a
 	  host flash the board over USB with no physical reset (the running
 	  firmware must already contain this feature; first install still needs a
-	  manual reset).
+	  manual reset). Detection is event-driven via the dwDTERate callback.
 
 if USB_BOOTLOADER_TOUCH
-
-config USB_BOOTLOADER_TOUCH_POLL_MS
-	int "Baud-rate poll interval (ms)"
-	default 250
-	help
-	  How often to sample the host-configured line coding. The legacy USB
-	  stack exposes no SetLineCoding callback, so we poll.
-
-config USB_BOOTLOADER_TOUCH_STACK_SIZE
-	int "Watcher thread stack size"
-	default 768
 
 config USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT
 	bool "Detect-only (do not reboot) — for native_sim/unit tests"
