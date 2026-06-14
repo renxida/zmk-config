@@ -8,7 +8,14 @@ from __future__ import annotations
 import random
 import unittest
 
-from kbd_flash import FlashError, Orchestrator, Timeouts
+from kbd_flash import (
+    FlashError,
+    Orchestrator,
+    Timeouts,
+    calibrate_from_devices,
+    side_from_product,
+)
+from kbd_flash import Device
 from sim import FaultConfig, SimPlatform, VirtualHalf
 
 
@@ -200,6 +207,61 @@ class Fuzz(unittest.TestCase):
                 else:
                     # INVARIANT 3: failure is a clean string, not an exception.
                     self.assertTrue(res[side].startswith("FAILED"), msg)
+
+
+class Calibration(unittest.TestCase):
+    def test_side_from_product(self):
+        self.assertEqual(side_from_product("Cradio L"), "left")
+        self.assertEqual(side_from_product("Cradio R"), "right")
+        self.assertEqual(side_from_product("cradio_left"), "left")
+        self.assertIsNone(side_from_product("Cradio"))
+        self.assertIsNone(side_from_product(""))
+        self.assertIsNone(side_from_product("left or right"))  # both -> ambiguous
+
+    def test_calibrate_happy(self):
+        devs = [Device("/d/a", "AAAA", "Cradio L"),
+                Device("/d/b", "BBBB", "Cradio R")]
+        self.assertEqual(calibrate_from_devices(devs),
+                         {"AAAA": "left", "BBBB": "right"})
+
+    def test_calibrate_ambiguous_raises(self):
+        with self.assertRaises(FlashError):
+            calibrate_from_devices([Device("/d/a", "AAAA", "Cradio")])
+
+    def test_calibrate_duplicate_side_raises(self):
+        devs = [Device("/d/a", "AAAA", "Cradio L"),
+                Device("/d/b", "BBBB", "Cradio L")]
+        with self.assertRaises(FlashError):
+            calibrate_from_devices(devs)
+
+    def test_calibrated_map_overrides_lying_product(self):
+        # product says right, calibration says left -> trust calibration
+        plat = SimPlatform([VirtualHalf("AAAA", "left", flashed_side="right")])
+        o = Orchestrator(plat, FW, {"AAAA": "left"})
+        self.assertEqual(o.resolve_side(Device("/d/a", "AAAA", "Cradio R")), "left")
+
+
+class CLI(unittest.TestCase):
+    def test_flash_sim_via_main_end_to_end(self):
+        import cli
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("cradio_left.uf2", "cradio_right.uf2",
+                         "settings_reset.uf2"):
+                open(f"{d}/{name}", "w").close()
+            rc = cli.main(["--sim", "flash", "--no-wipe", "--fw-dir", d,
+                           "--calib", "/nonexistent"])
+        self.assertEqual(rc, 0)  # sim halves advertise Cradio L/R -> product fallback
+
+    def test_flash_sim_missing_fw_is_clean_error(self):
+        import cli
+        rc = cli.main(["--sim", "flash", "--fw-dir", "/tmp/definitely-empty-xyz",
+                       "--calib", "/nonexistent"])
+        self.assertEqual(rc, 1)
+
+    def test_list_sim_via_main(self):
+        import cli
+        self.assertEqual(cli.main(["--sim", "list"]), 0)
 
 
 if __name__ == "__main__":

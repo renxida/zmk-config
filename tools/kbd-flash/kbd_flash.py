@@ -33,6 +33,41 @@ class FlashError(Exception):
     """Recoverable orchestration failure (timeout, mis-route, unknown chip)."""
 
 
+def side_from_product(product: str) -> Optional[str]:
+    """Infer side from a USB product string, only if unambiguous. Returns
+    'left'/'right' or None when it can't tell."""
+    p = (product or "").lower()
+    is_left = any(s in p for s in (" l", "left", "_l", "-l"))
+    is_right = any(s in p for s in (" r", "right", "_r", "-r"))
+    if is_left and not is_right:
+        return "left"
+    if is_right and not is_left:
+        return "right"
+    return None
+
+
+def calibrate_from_devices(devices: list["Device"]) -> dict[str, str]:
+    """Build a chip_id -> side map from currently-running devices using their
+    product strings. Raises on ambiguity or a duplicated side so we never
+    persist a wrong calibration."""
+    mapping: dict[str, str] = {}
+    seen: dict[str, str] = {}
+    for d in devices:
+        side = side_from_product(d.product)
+        if side is None:
+            raise FlashError(
+                f"cannot calibrate chip {d.chip_id!r}: product {d.product!r} "
+                f"is ambiguous; calibrate one half at a time instead"
+            )
+        if side in seen:
+            raise FlashError(
+                f"two devices look like {side!r}: {seen[side]} and {d.chip_id}"
+            )
+        seen[side] = d.chip_id
+        mapping[d.chip_id] = side
+    return mapping
+
+
 @dataclasses.dataclass(frozen=True)
 class Device:
     """A half currently enumerated as a running ZMK serial device."""
@@ -105,18 +140,13 @@ class Orchestrator:
         product string is a fallback; otherwise we refuse to guess."""
         if dev.chip_id in self.calib:
             return self.calib[dev.chip_id]
-        p = dev.product.lower()
-        # Accept "cradio l"/"left"/"-l" style hints, but only if unambiguous.
-        is_left = any(s in p for s in (" l", "left", "_l", "-l"))
-        is_right = any(s in p for s in (" r", "right", "_r", "-r"))
-        if is_left and not is_right:
-            return "left"
-        if is_right and not is_left:
-            return "right"
-        raise FlashError(
-            f"cannot determine side for chip {dev.chip_id!r} "
-            f"(product={dev.product!r}); calibrate first"
-        )
+        side = side_from_product(dev.product)
+        if side is None:
+            raise FlashError(
+                f"cannot determine side for chip {dev.chip_id!r} "
+                f"(product={dev.product!r}); calibrate first"
+            )
+        return side
 
     # --- generic wait helper ------------------------------------------------
     def _wait(self, predicate: Callable[[], Optional[object]], timeout: float, what: str):
