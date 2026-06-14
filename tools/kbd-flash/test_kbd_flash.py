@@ -300,6 +300,24 @@ class CLI(unittest.TestCase):
         import cli
         self.assertEqual(cli.main(["--sim", "list"]), 0)
 
+    def test_calibrate_writes_map_via_main(self):
+        import cli, json, tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "calib.json")
+            rc = cli.main(["--sim", "calibrate", "--out", out])
+            self.assertEqual(rc, 0)
+            with open(out) as fh:
+                m = json.load(fh)
+            self.assertEqual(m, {"AAAA1111": "left", "BBBB2222": "right"})
+
+    def test_calibrate_side_guard_with_two_halves(self):
+        import cli, tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            # sim has two halves; --side expects exactly one -> clean error rc 1
+            rc = cli.main(["--sim", "calibrate", "--side", "left",
+                           "--out", os.path.join(d, "c.json")])
+            self.assertEqual(rc, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

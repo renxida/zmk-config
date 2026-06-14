@@ -50,6 +50,12 @@ uniqueness is all that's needed.
 - Host tests: `cd tools/kbd-flash && python3 -m unittest -q`
 - FW test: `zmk_modules/usb-bootloader-touch/tests/native_sim/run_test.sh`
 
+## Loop iteration 1 — DONE
+Steps 1 (CI ARM build, green), 2 (CLI + calibrate incl one-at-a-time --side),
+3 (HWINFO serial, green), 4 (hardening + fuzz-found cross-contamination bug),
+6 (BENCH.md). Unified runner: `tools/kbd-flash/run_all_tests.sh` (host + fw,
+ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
+
 ## Next steps (priority order)
 1. [ ] Integrate the module into the REAL cradio ZMK build + push branch so CI
        does the ARM compile-check (renxida/zmk-actions). Wire chosen

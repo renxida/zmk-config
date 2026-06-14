@@ -53,10 +53,26 @@ def cmd_calibrate(args):
     plat = _platform(args)
     devices = plat.discover_running()
     if not devices:
-        print("no running halves found; plug both in", file=sys.stderr)
+        print("no running halves found; plug in", file=sys.stderr)
         return 1
-    mapping = calibrate_from_devices(devices)
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+
+    existing = load_calibration(args.out)
+    if args.side:
+        # one-at-a-time: exactly one half should be connected; record it.
+        if len(devices) != 1:
+            print(f"--side expects exactly ONE half connected, found {len(devices)}: "
+                  f"{[d.chip_id for d in devices]}", file=sys.stderr)
+            return 1
+        existing[devices[0].chip_id] = args.side
+        mapping = existing
+        print(f"recorded {devices[0].chip_id} -> {args.side}")
+    else:
+        # both connected: infer from product strings (needs distinct products).
+        learned = calibrate_from_devices(devices)
+        existing.update(learned)
+        mapping = existing
+
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     with open(args.out, "w") as fh:
         json.dump(mapping, fh, indent=2)
     print(f"wrote {args.out}:")
@@ -93,6 +109,8 @@ def main(argv=None):
 
     c = sub.add_parser("calibrate")
     c.add_argument("--out", default=DEFAULT_CALIB)
+    c.add_argument("--side", choices=("left", "right"),
+                   help="record the single connected half as this side")
     c.set_defaults(func=cmd_calibrate)
 
     f = sub.add_parser("flash")
