@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""Linux implementation of Platform for real hardware.
+
+The OS-interaction is split into thin live wrappers (subprocess calls) and pure
+parsers. Only the parsers are unit-tested here — the live calls need a keyboard
+plugged in, which is the part we verify with you on the bench.
+
+Identity model (must match the firmware/bootloader):
+  * running ZMK  -> /dev/ttyACM*  whose udev ID_SERIAL_SHORT == FICR.DEVICEID
+  * UF2 bootloader -> a FAT volume labelled NICENANO whose backing USB device
+    serial == the same FICR.DEVICEID (Adafruit bootloader publishes it).
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import time
+from typing import Optional
+
+from kbd_flash import BootVol, Device, Platform
+
+
+# Our keyboard's USB ids. nice!nano v2 running ZMK enumerates as Nordic/ZMK;
+# match loosely on product string too. Adjust VID/PID after first bench check.
+ZMK_PRODUCT_HINTS = ("cradio", "zmk", "ss")
+BOOTLOADER_LABELS = ("NICENANO", "NICE!NANO")
+
+
+# --- pure parsers (unit-tested) -------------------------------------------
+def parse_udev_properties(text: str) -> dict[str, str]:
+    """Parse `udevadm info -q property` KEY=VALUE lines."""
+    props: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        props[k] = v
+    return props
+
+
+def device_from_udev(devnode: str, props: dict[str, str]) -> Optional[Device]:
+    """Build a Device from udev props if it looks like one of our halves."""
+    if props.get("ID_SERIAL_SHORT") is None:
+        return None
+    product = props.get("ID_MODEL", "") or props.get("ID_MODEL_FROM_DATABASE", "")
+    blob = " ".join([
+        product, props.get("ID_SERIAL", ""), props.get("ID_VENDOR", "")
+    ]).lower()
+    if not any(h in blob for h in ZMK_PRODUCT_HINTS):
+        return None
+    return Device(port=devnode, chip_id=props["ID_SERIAL_SHORT"], product=product)
+
+
+def bootvols_from_lsblk(lsblk_json: str) -> list[BootVol]:
+    """Parse `lsblk -J -o NAME,LABEL,MOUNTPOINT,SERIAL,TYPE` for UF2 volumes."""
+    data = json.loads(lsblk_json)
+    out: list[BootVol] = []
+
+    def walk(node):
+        label = (node.get("label") or "").upper()
+        mnt = node.get("mountpoint")
+        serial = node.get("serial") or ""
+        if any(b in label for b in BOOTLOADER_LABELS) and mnt:
+            # lsblk SERIAL on the partition may be empty; caller can backfill
+            # the chip id from the parent USB device serial.
+            out.append(BootVol(mount=mnt, chip_id=serial))
+        for child in node.get("children", []) or []:
+            walk(child)
+
+    for dev in data.get("blockdevices", []):
+        walk(dev)
+    return out
+
+
+# --- live platform ---------------------------------------------------------
+class LinuxPlatform(Platform):
+    def __init__(self, run=None):
+        self._run = run or self._default_run
+
+    @staticmethod
+    def _default_run(cmd: list[str], **kw) -> str:
+        return subprocess.run(cmd, capture_output=True, text=True, **kw).stdout
+
+    def now(self) -> float:
+        return time.monotonic()
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
+
+    def discover_running(self) -> list[Device]:
+        out: list[Device] = []
+        by_id = "/dev/serial/by-id"
+        nodes = []
+        if os.path.isdir(by_id):
+            nodes = [os.path.realpath(os.path.join(by_id, e))
+                     for e in os.listdir(by_id)]
+        else:
+            nodes = ["/dev/" + e for e in os.listdir("/dev")
+                     if e.startswith("ttyACM")]
+        for node in sorted(set(nodes)):
+            props = parse_udev_properties(
+                self._run(["udevadm", "info", "-q", "property", "-n", node]))
+            dev = device_from_udev(node, props)
+            if dev:
+                out.append(dev)
+        return out
+
+    def discover_bootloaders(self) -> list[BootVol]:
+        vols = bootvols_from_lsblk(
+            self._run(["lsblk", "-J", "-o", "NAME,LABEL,MOUNTPOINT,SERIAL,TYPE"]))
+        # Backfill chip id from the USB device serial when the partition serial
+        # is blank (common): walk the block device's udev parent.
+        filled = []
+        for v in vols:
+            cid = v.chip_id
+            if not cid:
+                cid = self._chip_id_for_mount(v.mount)
+            filled.append(BootVol(mount=v.mount, chip_id=cid))
+        return filled
+
+    def _chip_id_for_mount(self, mount: str) -> str:
+        # findmnt -> source device -> udev ID_SERIAL_SHORT
+        src = self._run(["findmnt", "-n", "-o", "SOURCE", mount]).strip()
+        if not src:
+            return ""
+        props = parse_udev_properties(
+            self._run(["udevadm", "info", "-q", "property", "-n", src]))
+        return props.get("ID_SERIAL_SHORT", "")
+
+    def touch_1200(self, port: str) -> None:
+        # Open at 1200 baud then close, the Arduino "touch". stdlib termios only.
+        import termios
+        fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        try:
+            attrs = termios.tcgetattr(fd)
+            attrs[4] = termios.B1200  # ispeed
+            attrs[5] = termios.B1200  # ospeed
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+            time.sleep(0.2)
+        finally:
+            os.close(fd)
+
+    def copy_uf2(self, src: str, mount: str) -> None:
+        import shutil
+        dst = os.path.join(mount, os.path.basename(src))
+        try:
+            shutil.copy(src, dst)
+            fd = os.open(mount, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            # The bootloader reboots mid-copy and yanks the volume; that's the
+            # normal success signal, not a failure.
+            pass
