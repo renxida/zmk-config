@@ -163,6 +163,29 @@ class Serialization(unittest.TestCase):
         self.assertFalse(any("left" in e for e in r.events))
 
 
+class Hardening(unittest.TestCase):
+    def test_flap_during_discovery_is_absorbed(self):
+        # left half is invisible for the first 3 discovery polls, then appears.
+        l, r = make_pair(faults_l=FaultConfig(flap_polls=3))
+        plat = SimPlatform([l, r])
+        res = orch(plat, calib(l, r)).flash_all(wipe_bt=False)
+        self.assertEqual(res, {"left": "ok", "right": "ok"})
+
+    def test_chip_id_collision_raises(self):
+        l = VirtualHalf("DUPE", "left", flashed_side="left")
+        r = VirtualHalf("DUPE", "right", flashed_side="right")
+        plat = SimPlatform([l, r])
+        with self.assertRaises(FlashError):
+            orch(plat, {}).flash_all()
+
+    def test_single_half_still_works(self):
+        # only the left half plugged in -> flash just it, no spurious right wait
+        l = VirtualHalf("AAAA1111", "left", flashed_side="left")
+        plat = SimPlatform([l])
+        res = orch(plat, calib(l)).flash_all(wipe_bt=False)
+        self.assertEqual(res, {"left": "ok"})
+
+
 class Fuzz(unittest.TestCase):
     def test_random_delays_and_faults_preserve_invariants(self):
         trials = 400
@@ -175,6 +198,7 @@ class Fuzz(unittest.TestCase):
                     t_reset=rng.uniform(0.1, 6.0),
                     t_boot=rng.uniform(0.1, 6.0),
                 )
+                f.flap_polls = rng.choice([0, 0, 0, 1, 3, 7])
                 roll = rng.random()
                 if roll < 0.08:
                     f.drop_touch = True

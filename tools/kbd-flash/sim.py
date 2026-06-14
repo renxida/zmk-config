@@ -37,6 +37,7 @@ class FaultConfig:
     brick_on_flash: bool = False  # firmware copy never boots back (bad uf2)
     no_cdc_when_running: bool = False  # running half exposes no serial port
     ignore_settings_reset: bool = False  # settings_reset copy doesn't wipe/re-present
+    flap_polls: int = 0           # hide from discover_running for the first N polls
 
 
 @dataclasses.dataclass
@@ -68,6 +69,7 @@ class SimPlatform(Platform):
     def __init__(self, halves: list[VirtualHalf], start: float = 0.0):
         self.halves = halves
         self._t = start
+        self._run_polls = 0  # count of discover_running calls (for flap modelling)
 
     # clock --------------------------------------------------------------
     def now(self) -> float:
@@ -85,9 +87,12 @@ class SimPlatform(Platform):
     # discovery ----------------------------------------------------------
     def discover_running(self) -> list[Device]:
         self._advance_all()
+        self._run_polls += 1
         out = []
         for h in self.halves:
             if h.state == RUNNING and not h.faults.no_cdc_when_running:
+                if self._run_polls <= h.faults.flap_polls:
+                    continue  # transient enumeration flap: not visible yet
                 out.append(Device(port=f"/dev/sim-{h.chip_id}",
                                    chip_id=h.chip_id, product=h.product()))
         return out

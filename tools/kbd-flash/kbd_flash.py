@@ -202,9 +202,29 @@ class Orchestrator:
             )
         self.log(f"[{side}] {cid}: OK (running, product={run.product!r})")
 
+    def discover_stable(self, window: Optional[float] = None) -> list[Device]:
+        """Discover running halves, debounced against transient USB-enumeration
+        flap by accumulating the union of devices seen over a short settle
+        window. Raises on a same-poll chip-id collision (an identity bug we
+        must not paper over by flashing blindly)."""
+        window = window if window is not None else min(3.0, self.t.bootloader)
+        deadline = self.plat.now() + window
+        by_id: dict[str, Device] = {}
+        while True:
+            devs = self.plat.discover_running()
+            ids = [d.chip_id for d in devs]
+            if len(set(ids)) != len(ids):
+                raise FlashError(f"chip-id collision among running devices: {ids}")
+            for d in devs:
+                by_id[d.chip_id] = d  # latest wins; union absorbs flap
+            if self.plat.now() >= deadline:
+                break
+            self.plat.sleep(self.t.poll)
+        return list(by_id.values())
+
     # --- top level ----------------------------------------------------------
     def flash_all(self, wipe_bt: bool = True) -> dict[str, str]:
-        devices = self.plat.discover_running()
+        devices = self.discover_stable()
         if not devices:
             raise FlashError("no keyboard halves found over USB")
 
