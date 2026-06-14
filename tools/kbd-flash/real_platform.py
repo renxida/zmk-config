@@ -138,15 +138,18 @@ class LinuxPlatform(Platform):
         return props.get("ID_SERIAL_SHORT", "")
 
     def touch_1200(self, port: str) -> None:
-        # Open at 1200 baud then close, the Arduino "touch". stdlib termios only.
+        # The firmware watcher fires on a baud *change* to 1200. The OS may set
+        # the rate on first open, so a bare "set 1200" can be a no-op change.
+        # Prime to 9600 first, then 1200, within a single open. stdlib termios.
         import termios
         fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         try:
             attrs = termios.tcgetattr(fd)
-            attrs[4] = termios.B1200  # ispeed
-            attrs[5] = termios.B1200  # ospeed
-            termios.tcsetattr(fd, termios.TCSANOW, attrs)
-            time.sleep(0.2)
+            for speed in (termios.B9600, termios.B1200):
+                attrs[4] = speed  # ispeed
+                attrs[5] = speed  # ospeed
+                termios.tcsetattr(fd, termios.TCSANOW, attrs)
+                time.sleep(0.2)
         finally:
             os.close(fd)
 

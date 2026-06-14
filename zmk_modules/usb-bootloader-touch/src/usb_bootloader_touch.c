@@ -29,13 +29,19 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/logging/log.h>
 
-#if IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
+#if IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_NRF_GPREGRET)
+#include <hal/nrf_power.h>
+#elif IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
 #include <zephyr/retention/bootmode.h>
 #endif
 
 LOG_MODULE_REGISTER(usb_bl_touch, CONFIG_USB_BOOTLOADER_TOUCH_LOG_LEVEL);
 
 #define TOUCH_BAUD 1200U
+
+/* Adafruit nRF52 bootloader DFU_MAGIC_UF2_RESET: written to GPREGRET[0] tells
+ * the bootloader to enter UF2 DFU on the next boot. */
+#define UF2_DFU_MAGIC 0x57U
 
 #define TOUCH_UART_NODE DT_CHOSEN(zmk_bootloader_touch_uart)
 BUILD_ASSERT(DT_NODE_HAS_STATUS(TOUCH_UART_NODE, okay),
@@ -56,9 +62,16 @@ static void enter_bootloader_work(struct k_work *work)
 {
 	ARG_UNUSED(work);
 
-	LOG_WRN("entering UF2 bootloader");
+	LOG_WRN("1200-baud touch: rebooting into UF2 bootloader");
 
-#if IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
+#if IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_NRF_GPREGRET)
+	/* Deterministic nRF52 path: write the UF2 DFU magic to GPREGRET[0]
+	 * directly — exactly what ZMK's bootmode magic-mapper ends up doing, but
+	 * without depending on the retention boot_mode subsystem (which is not
+	 * enabled in this build). GPREGRET survives the warm/soft reset; the
+	 * Adafruit bootloader reads it on boot and enters UF2 DFU. */
+	nrf_power_gpregret_set(NRF_POWER, 0, UF2_DFU_MAGIC);
+#elif IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
 	int ret = bootmode_set(BOOT_MODE_TYPE_BOOTLOADER);
 
 	if (ret < 0) {
@@ -66,15 +79,17 @@ static void enter_bootloader_work(struct k_work *work)
 		return;
 	}
 #else
-	/* native_sim / unit builds: no retention HW. */
-	LOG_WRN("RETENTION_BOOT_MODE disabled: would enter bootloader (test build)");
+	/* native_sim / unit builds: no bootloader-entry mechanism. */
+	LOG_WRN("no bootloader-entry mechanism for this target (test build)");
 	if (IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT)) {
 		return;
 	}
 #endif
 
-	/* Let the host's SetLineCoding ack flush before we drop off the bus. */
-	k_msleep(50);
+	/* Flush the decision over CDC before we drop off the bus (so the WRN line
+	 * is observable for hardware debugging), then reboot. */
+	LOG_PANIC();
+	k_msleep(150);
 	sys_reboot(SYS_REBOOT_WARM);
 }
 

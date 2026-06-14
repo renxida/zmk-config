@@ -24,8 +24,22 @@ echo "running USB serial (via ioreg):"
 ioreg -p IOUSB -l 2>/dev/null | grep -A40 -i "$(basename "$PORT" | sed 's/cu\.//')" 2>/dev/null \
   | grep -i '"USB Serial Number"' | head -1 || echo "  (couldn't read; try: system_profiler SPUSBDataType)"
 
-echo "== touching $PORT at 1200 baud (the trigger) =="
-stty -f "$PORT" 1200 || { echo "stty failed (port busy? ModemManager-equivalent?)"; exit 1; }
+echo "== touching $PORT (prime 9600 -> 1200, the trigger) =="
+# The watcher fires on a baud *change* to 1200. macOS sets the rate on first
+# open, so a bare `stty 1200` is a no-op change. Prime to 9600 then 1200 within
+# one open (termios), which sends SetLineCoding(9600) then (1200).
+python3 - "$PORT" <<'PY' || { echo "touch failed (port busy?)"; exit 1; }
+import sys, os, termios, time
+fd = os.open(sys.argv[1], os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+try:
+    a = termios.tcgetattr(fd)
+    for sp in (termios.B9600, termios.B1200):
+        a[4] = sp; a[5] = sp
+        termios.tcsetattr(fd, termios.TCSANOW, a)
+        time.sleep(0.3)
+finally:
+    os.close(fd)
+PY
 
 echo "== waiting up to 15s for NICENANO to mount (NO physical reset) =="
 VOL=""

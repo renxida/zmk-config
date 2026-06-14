@@ -16,6 +16,16 @@ config USB_BOOTLOADER_TOUCH
 
 if USB_BOOTLOADER_TOUCH
 
+config USB_BOOTLOADER_TOUCH_NRF_GPREGRET
+	bool "Enter the bootloader by writing the UF2 magic to nRF GPREGRET directly"
+	depends on SOC_COMPATIBLE_NRF52X
+	default y
+	help
+	  On nRF52 (nice!nano etc.), write the Adafruit UF2 DFU magic (0x57) to
+	  GPREGRET[0] before reboot instead of going through the retention
+	  boot_mode subsystem. This is what the mapper ultimately does and is
+	  deterministic even when CONFIG_RETENTION_BOOT_MODE is not enabled.
+
 config USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT
 	bool "Detect-only (do not reboot) — for native_sim/unit tests"
 	default n
