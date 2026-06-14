@@ -4,10 +4,10 @@ include:
   - board: nice_nano_v2
     shield: cradio_left
     snippet: zmk-usb-logging
-    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
+    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_left.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
   - board: nice_nano_v2
     shield: cradio_right
     snippet: zmk-usb-logging
-    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
+    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_right.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
   - board: nice_nano_v2
     shield: settings_reset

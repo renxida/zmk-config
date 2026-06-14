@@ -90,12 +90,12 @@ def cmd_flash(args):
         return 1
     calib = load_calibration(args.calib)
     orch = Orchestrator(plat, fw, calib, timeouts=Timeouts(), log=lambda m: print(m))
-    results = orch.flash_all(wipe_bt=not args.no_wipe)
+    results = orch.flash_all(wipe_bt=not args.no_wipe, dry_run=args.dry_run)
     print("---")
     rc = 0
     for side, status in sorted(results.items()):
         print(f"{side}: {status}")
-        if status != "ok":
+        if status not in ("ok", "dry-run"):
             rc = 1
     return rc
 
@@ -115,6 +115,8 @@ def main(argv=None):
 
     f = sub.add_parser("flash")
     f.add_argument("--no-wipe", action="store_true", help="keep BT bonds")
+    f.add_argument("--dry-run", action="store_true",
+                   help="show the plan (which fw to which half) without flashing")
     f.add_argument("--fw-dir", default=DEFAULT_FW_DIR)
     f.add_argument("--calib", default=DEFAULT_CALIB)
     f.set_defaults(func=cmd_flash)

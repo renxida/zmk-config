@@ -59,6 +59,14 @@ class HappyPath(unittest.TestCase):
             self.assertIn("settings_reset", copies[0])
             self.assertNotIn("settings_reset", copies[1])
 
+    def test_dry_run_touches_nothing(self):
+        l, r = make_pair()
+        plat = SimPlatform([l, r])
+        res = orch(plat, calib(l, r)).flash_all(dry_run=True)
+        self.assertEqual(res, {"left": "dry-run", "right": "dry-run"})
+        self.assertEqual(l.events, [])
+        self.assertEqual(r.events, [])
+
     def test_both_flash_no_wipe(self):
         l, r = make_pair()
         plat = SimPlatform([l, r])
@@ -311,6 +319,16 @@ class CLI(unittest.TestCase):
     def test_list_sim_via_main(self):
         import cli
         self.assertEqual(cli.main(["--sim", "list"]), 0)
+
+    def test_flash_dry_run_via_main(self):
+        import cli, tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            for name in ("cradio_left.uf2", "cradio_right.uf2",
+                         "settings_reset.uf2"):
+                open(f"{d}/{name}", "w").close()
+            rc = cli.main(["--sim", "flash", "--dry-run", "--fw-dir", d,
+                           "--calib", "/nonexistent"])
+        self.assertEqual(rc, 0)
 
     def test_calibrate_writes_map_via_main(self):
         import cli, json, tempfile, os

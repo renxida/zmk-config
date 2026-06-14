@@ -66,16 +66,25 @@ ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
 - Fuzzer: added no_cdc_when_running dimension (undiscovered half) + tolerate the
   no-devices hard error. 36 tests, 1500-trial fuzz, all green.
 
+## Loop iteration 3 — DONE
+- Per-side USB product strings: `config/bootloader_touch_{left,right}.conf`
+  (self-contained; CONFIG_USB_DEVICE_PRODUCT "Cradio L"/"R"), wired per cradio
+  entry in build.yaml. Removed the shared bootloader_touch.conf. -> `list` and
+  product-fallback calibration now distinguish halves with both plugged in.
+- `kbd-flash flash --dry-run`: resolves + prints the plan, touches nothing.
+- DTR-drop gating DECISION: NOT implementing. The udev ModemManager-ignore rule
+  already removes the only realistic accidental trigger; adding DTR-close gating
+  would add firmware complexity and break the simple `stty 1200` convention for
+  marginal benefit. Revisit only if a bench test shows spurious triggers.
+- 38 host tests + 1500-trial fuzz + native_sim fw test green.
+
 ## Next steps (priority order)
-1. [ ] (optional) per-side USB product strings ("Cradio L"/"R") so `list` and
-       product-fallback calibration distinguish halves without one-at-a-time.
-       Needs per-side EXTRA_CONF in build.yaml (USB_DEVICE_PRODUCT differs).
-2. [ ] real_platform: verify-after-flash (confirm the half actually booted the
-       new fw, not a silent copy_uf2 OSError-swallow); add a --dry-run.
-3. [ ] Consider firmware: require DTR-drop (port close) at 1200 to better match
-       the Arduino touch and further reduce spurious triggers (evaluate vs the
-       udev mitigation already in place — may be unnecessary).
-4. [ ] Everything in "Hardware-only" below — needs Cedar + bench (see BENCH.md).
+1. [ ] real_platform: verify-after-flash beyond re-enumeration (e.g. read back
+       the per-side product string to confirm the NEW fw booted, not a silent
+       copy_uf2 OSError-swallow). Mostly covered by the resolve_side check now
+       that products are per-side — tighten if a gap remains.
+2. [ ] Confirm CI green with per-side product (this push).
+3. [ ] Everything in "Hardware-only" below — needs Cedar + bench (see BENCH.md).
 
 ## Hardware-only (cannot test here, verify on bench)
 - The actual GPREGRET→UF2 handoff (native_sim has no retention reg).

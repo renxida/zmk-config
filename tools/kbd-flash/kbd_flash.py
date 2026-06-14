@@ -240,7 +240,7 @@ class Orchestrator:
         return list(by_id.values())
 
     # --- top level ----------------------------------------------------------
-    def flash_all(self, wipe_bt: bool = True) -> dict[str, str]:
+    def flash_all(self, wipe_bt: bool = True, dry_run: bool = False) -> dict[str, str]:
         devices = self.discover_stable()
         if not devices:
             raise FlashError("no keyboard halves found over USB")
@@ -258,6 +258,15 @@ class Orchestrator:
                 )
             seen_sides[side] = d.chip_id
             plan.append((d, side))
+
+        if dry_run:
+            results = {}
+            for dev, side in plan:
+                self.log(f"[dry-run] {side}: would flash chip {dev.chip_id} on "
+                         f"{dev.port} (fw={os.path.basename(self.fw[side])}, "
+                         f"wipe_bt={wipe_bt})")
+                results[side] = "dry-run"
+            return results
 
         results: dict[str, str] = {}
         for dev, side in plan:
