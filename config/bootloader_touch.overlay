@@ -1,0 +1,10 @@
+/*
+ * Point the usb-bootloader-touch watcher at the CDC ACM UART that the
+ * zmk-usb-logging snippet creates (node label snippet_zmk_usb_logging_uart).
+ * Applied after the snippet overlay via EXTRA_DTC_OVERLAY_FILE.
+ */
+/ {
+	chosen {
+		zmk,bootloader-touch-uart = &snippet_zmk_usb_logging_uart;
+	};
+};
