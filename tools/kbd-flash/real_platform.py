@@ -21,8 +21,10 @@ from typing import Optional
 from kbd_flash import BootVol, Device, Platform
 
 
-# Our keyboard's USB ids. nice!nano v2 running ZMK enumerates as Nordic/ZMK;
-# match loosely on product string too. Adjust VID/PID after first bench check.
+# Our keyboard's USB ids. ZMK defaults: VID 1d50 / PID 615e. The UF2 bootloader
+# (Adafruit nRF) is VID 239a. Product hints are a softer secondary signal.
+ZMK_VID = "1d50"
+ZMK_PID = "615e"
 ZMK_PRODUCT_HINTS = ("cradio", "zmk", "ss")
 BOOTLOADER_LABELS = ("NICENANO", "NICE!NANO")
 
@@ -41,16 +43,22 @@ def parse_udev_properties(text: str) -> dict[str, str]:
 
 
 def device_from_udev(devnode: str, props: dict[str, str]) -> Optional[Device]:
-    """Build a Device from udev props if it looks like one of our halves."""
-    if props.get("ID_SERIAL_SHORT") is None:
+    """Build a Device from udev props if it looks like one of our halves.
+    Primary signal is the ZMK USB VID; product-string hints are a fallback for
+    when the VID was customised."""
+    chip = props.get("ID_SERIAL_SHORT")
+    if not chip:
         return None
     product = props.get("ID_MODEL", "") or props.get("ID_MODEL_FROM_DATABASE", "")
+    vid = (props.get("ID_VENDOR_ID") or props.get("ID_USB_VENDOR_ID") or "").lower()
+    if vid == ZMK_VID:
+        return Device(port=devnode, chip_id=chip, product=product)
     blob = " ".join([
         product, props.get("ID_SERIAL", ""), props.get("ID_VENDOR", "")
     ]).lower()
-    if not any(h in blob for h in ZMK_PRODUCT_HINTS):
-        return None
-    return Device(port=devnode, chip_id=props["ID_SERIAL_SHORT"], product=product)
+    if any(h in blob for h in ZMK_PRODUCT_HINTS):
+        return Device(port=devnode, chip_id=chip, product=product)
+    return None
 
 
 def bootvols_from_lsblk(lsblk_json: str) -> list[BootVol]:

@@ -56,37 +56,26 @@ Steps 1 (CI ARM build, green), 2 (CLI + calibrate incl one-at-a-time --side),
 6 (BENCH.md). Unified runner: `tools/kbd-flash/run_all_tests.sh` (host + fw,
 ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
 
+## Loop iteration 2 — DONE
+- Accidental-1200-trigger: decided (keep 1200, tool-compatible) + mitigated the
+  real threat (ModemManager) with `99-zmk-kbd-flash.rules` (ID_MM_DEVICE_IGNORE
+  + user access + stable symlink). Documented in BENCH.md §0b.
+- real_platform: match running halves by ZMK VID (1d50) primarily; bootloader
+  VID 239a. Edge tests: VID-only match, missing serial, NICENANO-1 double mount,
+  empty lsblk.
+- Fuzzer: added no_cdc_when_running dimension (undiscovered half) + tolerate the
+  no-devices hard error. 36 tests, 1500-trial fuzz, all green.
+
 ## Next steps (priority order)
-1. [ ] Integrate the module into the REAL cradio ZMK build + push branch so CI
-       does the ARM compile-check (renxida/zmk-actions). Wire chosen
-       `zmk,bootloader-touch-uart` to the zmk-usb-logging CDC; add `snippet:
-       zmk-usb-logging` + the module to build. Confirm GPREGRET path compiles
-       with RETENTION_BOOT_MODE (the real reboot path, untested on native_sim).
-       CI MECHANICS (confirmed from renxida/zmk-actions build-user-config.yml):
-       - per build.yaml entry: `snippet: zmk-usb-logging` -> `-S`, and
-         `cmake-args:` is appended to the west build line verbatim.
-       - pass `cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch`
-         (GITHUB_WORKSPACE expands in the build step shell).
-       - zmk-usb-logging snippet's CDC node is labelled
-         `snippet_zmk_usb_logging_uart`; chosen overlay should set
-         `zmk,bootloader-touch-uart = &snippet_zmk_usb_logging_uart`.
-       OPEN QUESTION to resolve WITH CI: how config/*.conf + *.overlay apply
-       per shield in THIS repo (config has cradio.conf + cradio.keymap but
-       shields are cradio_left/right — verify the include mechanism before
-       adding CONFIG_USB_BOOTLOADER_TOUCH=y so it lands on the right builds).
-       SAFE APPROACH: add separate touch artifacts first (don't break the 3
-       working builds), confirm green, then fold into main cradio_left/right.
-       Use the ci-wait skill / `gh run watch` to monitor; iterate on errors.
-2. [ ] `kbd-flash-all` CLI entrypoint + `calibrate` subcommand (learn chip→side).
-3. [ ] Set ZMK running USB serial = FICR.DEVICEID + product "Cradio L/R" per
-       side (so host identifies running halves, not just bootloader).
-4. [ ] Harden harness: flapping discovery, "NICENANO 1" double-mount naming,
-       partial/anti-flap debounce, chip-id collision, calibration vs product
-       disagreement. Add to sim fuzz dimensions.
-5. [ ] native_sim: model the full flash *sequence* (settings_reset re-present)
-       if feasible; otherwise document hardware-only gaps.
-6. [ ] Bench checklist for testing with real keyboards (the part only Cedar can
-       do): first manual reset to install touch fw, then USB-triggered reflash.
+1. [ ] (optional) per-side USB product strings ("Cradio L"/"R") so `list` and
+       product-fallback calibration distinguish halves without one-at-a-time.
+       Needs per-side EXTRA_CONF in build.yaml (USB_DEVICE_PRODUCT differs).
+2. [ ] real_platform: verify-after-flash (confirm the half actually booted the
+       new fw, not a silent copy_uf2 OSError-swallow); add a --dry-run.
+3. [ ] Consider firmware: require DTR-drop (port close) at 1200 to better match
+       the Arduino touch and further reduce spurious triggers (evaluate vs the
+       udev mitigation already in place — may be unnecessary).
+4. [ ] Everything in "Hardware-only" below — needs Cedar + bench (see BENCH.md).
 
 ## Hardware-only (cannot test here, verify on bench)
 - The actual GPREGRET→UF2 handoff (native_sim has no retention reg).

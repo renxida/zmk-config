@@ -9,6 +9,21 @@ CI artifact from branch `feat/usb-bootloader-touch` (build "Build ZMK firmware
 
     gh run download <run-id> -D ~/zmk-config/firmware
 
+## 0b. Host setup (do once) — accidental-trigger mitigation
+The watcher reboots to bootloader on ANY 1200-baud open of the CDC console.
+The real risk is **ModemManager** probing the new ttyACM (it cycles baud rates,
+could hit 1200, and drop your keyboard into the bootloader mid-use). Decision:
+keep the 1200 trigger (standard, tool-compatible) and stop ModemManager from
+touching the device via udev:
+
+    sudo cp tools/kbd-flash/99-zmk-kbd-flash.rules /etc/udev/rules.d/
+    sudo udevadm control --reload && sudo udevadm trigger
+
+This also grants user access (no sudo chmod) and a stable `/dev/zmk-<serial>`
+symlink. VERIFY VID/PID with `lsusb` first (rule assumes ZMK 1d50:615e). With
+the rule installed, a deliberate `stty 1200` still triggers (that's the touch);
+only background probing is prevented.
+
 ## 1. Bootstrap install (ONE manual reset per half — unavoidable)
 The halves currently run firmware WITHOUT the touch feature, so the first
 install still needs a physical reset.

@@ -1,0 +1,16 @@
+# udev rules for ZMK split halves + UF2 bootloader.
+# Install: sudo cp 99-zmk-kbd-flash.rules /etc/udev/rules.d/ && sudo udevadm control --reload
+#
+# WHY: the usb-bootloader-touch firmware reboots into the bootloader when the
+# CDC console is opened at 1200 baud. ModemManager probes new ttyACM devices
+# (AT commands at assorted baud rates) and could trip that accidentally,
+# dropping the keyboard into the bootloader mid-use. We tell ModemManager to
+# leave our device alone. (Verify VID/PID with `lsusb` on the bench; ZMK
+# defaults are 1d50:615e, Adafruit nRF UF2 bootloader is 239a.)
+
+# Running ZMK half: keep ModemManager off it, allow user access, stable symlink.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="615e", ENV{ID_MM_DEVICE_IGNORE}="1"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="615e", MODE="0660", GROUP="plugdev", SYMLINK+="zmk-$attr{serial}"
+
+# UF2 bootloader (Adafruit nRF): user-accessible block device + automount hint.
+SUBSYSTEM=="block", ATTRS{idVendor}=="239a", ENV{UDISKS_AUTO}="1"

@@ -219,6 +219,8 @@ class Fuzz(unittest.TestCase):
                     f.brick_on_flash = True
                 elif roll < 0.22:
                     f.ignore_settings_reset = True
+                elif roll < 0.27:
+                    f.no_cdc_when_running = True  # never enumerates -> undiscovered
                 return f
 
             l, r = make_pair(faults_l=rfault(), faults_r=rfault())
@@ -227,15 +229,25 @@ class Fuzz(unittest.TestCase):
             r.flashed_side = rng.choice(["left", "right"])
             plat = SimPlatform([l, r], start=rng.uniform(0, 1000))
             wipe = rng.random() < 0.5
-            res = orch(plat, calib(l, r)).flash_all(wipe_bt=wipe)
+            try:
+                res = orch(plat, calib(l, r)).flash_all(wipe_bt=wipe)
+            except FlashError:
+                # acceptable only when nothing was discoverable at all.
+                res = {}
+                self.assertEqual(l.events, [], f"seed={seed} l touched then raised")
+                self.assertEqual(r.events, [], f"seed={seed} r touched then raised")
 
             for h, side in ((l, "left"), (r, "right")):
-                msg = f"seed={seed} side={side} events={h.events} res={res[side]}"
-                # INVARIANT 1: never flash the wrong side onto a half.
+                status = res.get(side)
+                msg = f"seed={seed} side={side} events={h.events} res={status}"
+                # INVARIANT 1 (always): never flash the wrong side onto a half.
                 self.assertFalse(any(s in e for e in h.events
                                      for s in (["right"] if side == "left" else ["left"])
                                      if e.startswith("copy:")), msg)
-                if res[side] == "ok":
+                if status is None:
+                    # never discovered (e.g. no CDC) -> must be wholly untouched.
+                    self.assertEqual(h.events, [], msg)
+                elif status == "ok":
                     # INVARIANT 2: success => correct fw installed and running.
                     self.assertEqual(h.flashed_side, side, msg)
                     self.assertEqual(h.state, "running", msg)
@@ -243,7 +255,7 @@ class Fuzz(unittest.TestCase):
                         self.assertTrue(h.bt_wiped, msg)
                 else:
                     # INVARIANT 3: failure is a clean string, not an exception.
-                    self.assertTrue(res[side].startswith("FAILED"), msg)
+                    self.assertTrue(status.startswith("FAILED"), msg)
 
 
 class Calibration(unittest.TestCase):
