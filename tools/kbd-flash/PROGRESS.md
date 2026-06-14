@@ -35,6 +35,21 @@ the correct firmware and BT cleared, no physical reset. Two pieces:
        `zmk,bootloader-touch-uart` to the zmk-usb-logging CDC; add `snippet:
        zmk-usb-logging` + the module to build. Confirm GPREGRET path compiles
        with RETENTION_BOOT_MODE (the real reboot path, untested on native_sim).
+       CI MECHANICS (confirmed from renxida/zmk-actions build-user-config.yml):
+       - per build.yaml entry: `snippet: zmk-usb-logging` -> `-S`, and
+         `cmake-args:` is appended to the west build line verbatim.
+       - pass `cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch`
+         (GITHUB_WORKSPACE expands in the build step shell).
+       - zmk-usb-logging snippet's CDC node is labelled
+         `snippet_zmk_usb_logging_uart`; chosen overlay should set
+         `zmk,bootloader-touch-uart = &snippet_zmk_usb_logging_uart`.
+       OPEN QUESTION to resolve WITH CI: how config/*.conf + *.overlay apply
+       per shield in THIS repo (config has cradio.conf + cradio.keymap but
+       shields are cradio_left/right — verify the include mechanism before
+       adding CONFIG_USB_BOOTLOADER_TOUCH=y so it lands on the right builds).
+       SAFE APPROACH: add separate touch artifacts first (don't break the 3
+       working builds), confirm green, then fold into main cradio_left/right.
+       Use the ci-wait skill / `gh run watch` to monitor; iterate on errors.
 2. [ ] `kbd-flash-all` CLI entrypoint + `calibrate` subcommand (learn chip→side).
 3. [ ] Set ZMK running USB serial = FICR.DEVICEID + product "Cradio L/R" per
        side (so host identifies running halves, not just bootloader).
