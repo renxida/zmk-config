@@ -57,12 +57,19 @@ set the rate on first open — so PRIME to another rate first:
 
 A bare `stty 1200` is a no-op change and will NOT trigger — confirmed on macOS.
 
-VERIFY ON HARDWARE (the parts native_sim could not):
-- [ ] After the primed 9600->1200 touch, the half reboots and `NICENANO`
-      mass-storage mounts (exercises the real GPREGRET=0x57 -> UF2 handoff).
-      NOTE: the first hardware run reached the reboot but landed in normal fw —
-      the build had RETENTION_BOOT_MODE off so the magic was never written.
-      Fixed: nRF52 now writes 0x57 to GPREGRET[0] directly (run 27514396150+).
+VERIFIED ON HARDWARE (the parts native_sim could not):
+- [x] Primed 9600->1200 touch -> half reboots -> `NICENANO` mounts reset-free
+      (real GPREGRET=0x57 -> UF2 handoff). LEFT half: 5/5 trials, immediate and
+      settled. Right half: identical fw, expected to work, not yet tested.
+- [x] Two bugs found + fixed on hardware along the way:
+      1. Build had RETENTION_BOOT_MODE off -> module took #else -> bare reboot,
+         magic never written (run <=27514396150).
+      2. The nRF path then wrote GPREGRET=0x57 but fell through to
+         sys_reboot(SYS_REBOOT_WARM); with NRF_STORE_REBOOT_TYPE_GPREGRET=y,
+         sys_reboot writes its arg to GPREGRET[0], so WARM(0) CLOBBERED the
+         magic (entry worked ~1/11, that success was double-reset detection).
+      FIX (fix/gpregret-reboot): reboot via sys_reboot(0x57) — magic as the
+      reboot type — so the store writes the magic instead of clobbering it.
 - [x] Running serial vs bootloader serial: SETTLED — identical 16-hex, no byte
       reorder (e.g. 8905AEEAAFB95703). The orchestrator does not rely on this.
 

@@ -92,6 +92,17 @@ ALL GREEN). 32 host tests + 1500-trial fuzz + native_sim+usbip fw test.
 - 39 tests green. SOFTWARE COMPLETE — switching loop to long idle intervals;
   only hardware-gated bench work remains (BENCH.md).
 
+## Hardware test #2/#3 — RESOLVED, validated 5/5 (left half)
+The "fix" from test #1 (direct GPREGRET write) did NOT actually work: detection +
+reboot were reliable on both halves, but UF2 entry was ~1/11 (that success was
+Adafruit double-reset detection). Root cause: the nRF path wrote GPREGRET=0x57
+then fell through to sys_reboot(SYS_REBOOT_WARM); with NRF_STORE_REBOOT_TYPE_GPREGRET=y
+sys_reboot writes its arg to GPREGRET[0], so WARM(0) CLOBBERED the magic.
+FIX (branch fix/gpregret-reboot): reboot via sys_reboot(0x57) — magic as the
+reboot type — plus a GPREGRET readback WRN for observability. Hardware: LEFT
+half 5/5 (immediate + settled). Right half identical fw, not yet tested.
+Lesson: don't claim "hardware-validated" from a single fluke success (PR #5 did).
+
 ## Hardware test #1 (real nRF52840 Cradio LEFT) — bug found + fixed
 - CONFIRMED on hw: CDC enumerates, 1200-baud touch IS detected + reboots, and
   running serial == bootloader serial == 8905AEEAAFB95703 (identical, no
