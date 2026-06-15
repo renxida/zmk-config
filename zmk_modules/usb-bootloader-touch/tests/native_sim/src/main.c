@@ -5,10 +5,24 @@
  * script can observe it).
  */
 #include <zephyr/kernel.h>
+#include <zephyr/init.h>
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
+
+/*
+ * Recoverability check (mirrors ZMK's settings_reset): an early POST_KERNEL
+ * init that "erases" and RETURNS must not strand the device — USB CDC + the
+ * touch watcher must still come up afterwards. Same init level/priority (60)
+ * as zmk_settings_erase. If this broke the touch path, run_test.sh would fail.
+ */
+static int mock_settings_erase(void)
+{
+	LOG_WRN("mock: settings erased at POST_KERNEL (recoverability check)");
+	return 0;
+}
+SYS_INIT(mock_settings_erase, POST_KERNEL, 60);
 
 int main(void)
 {
