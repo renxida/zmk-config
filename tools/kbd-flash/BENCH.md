@@ -59,8 +59,8 @@ A bare `stty 1200` is a no-op change and will NOT trigger — confirmed on macOS
 
 VERIFIED ON HARDWARE (the parts native_sim could not):
 - [x] Primed 9600->1200 touch -> half reboots -> `NICENANO` mounts reset-free
-      (real GPREGRET=0x57 -> UF2 handoff). LEFT half: 5/5 trials, immediate and
-      settled. Right half: identical fw, expected to work, not yet tested.
+      (real GPREGRET=0x57 -> UF2 handoff). BOTH halves: 5/5 trials each (left
+      8905, right 32AA), immediate and settled. Validated on the full keyboard.
 - [x] Two bugs found + fixed on hardware along the way:
       1. Build had RETENTION_BOOT_MODE off -> module took #else -> bare reboot,
          magic never written (run <=27514396150).
