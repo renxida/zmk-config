@@ -66,32 +66,41 @@ static void enter_bootloader_work(struct k_work *work)
 	LOG_WRN("1200-baud touch: rebooting into UF2 bootloader");
 
 #if IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_NRF_GPREGRET)
-	/* Deterministic nRF52 path: write the UF2 DFU magic to GPREGRET[0]
-	 * directly — exactly what ZMK's bootmode magic-mapper ends up doing, but
-	 * without depending on the retention boot_mode subsystem (which is not
-	 * enabled in this build). GPREGRET survives the warm/soft reset; the
-	 * Adafruit bootloader reads it on boot and enters UF2 DFU. */
+	/* nRF52: write the Adafruit UF2 DFU magic (0x57) to GPREGRET[0], which the
+	 * bootloader reads on boot. Read it back so a hardware capture proves the
+	 * write actually lands. */
 	nrf_power_gpregret_set(NRF_POWER, 0, UF2_DFU_MAGIC);
-#elif IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
-	int ret = bootmode_set(BOOT_MODE_TYPE_BOOTLOADER);
+	uint32_t rb = nrf_power_gpregret_get(NRF_POWER, 0);
 
-	if (ret < 0) {
-		LOG_ERR("bootmode_set failed (%d); not rebooting", ret);
+	LOG_WRN("GPREGRET readback=0x%02x (want 0x%02x)", (unsigned int)rb, UF2_DFU_MAGIC);
+	LOG_PANIC();
+	k_msleep(150);
+
+	/* Reboot passing the magic AS the reboot type. With
+	 * CONFIG_NRF_STORE_REBOOT_TYPE_GPREGRET=y (set in this build), sys_reboot()
+	 * writes its argument into GPREGRET[0] just before resetting — so a plain
+	 * SYS_REBOOT_WARM (0) would CLOBBER the magic we just wrote. Passing 0x57
+	 * makes that store write the magic; the direct write above covers the case
+	 * where the store is a no-op. Either way GPREGRET[0] == 0x57 at reset. */
+	sys_reboot(UF2_DFU_MAGIC);
+#elif IS_ENABLED(CONFIG_RETENTION_BOOT_MODE)
+	if (bootmode_set(BOOT_MODE_TYPE_BOOTLOADER) < 0) {
+		LOG_ERR("bootmode_set failed; not rebooting");
 		return;
 	}
+	LOG_PANIC();
+	k_msleep(150);
+	sys_reboot(SYS_REBOOT_WARM);
 #else
 	/* native_sim / unit builds: no bootloader-entry mechanism. */
 	LOG_WRN("no bootloader-entry mechanism for this target (test build)");
 	if (IS_ENABLED(CONFIG_USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT)) {
 		return;
 	}
-#endif
-
-	/* Flush the decision over CDC before we drop off the bus (so the WRN line
-	 * is observable for hardware debugging), then reboot. */
 	LOG_PANIC();
 	k_msleep(150);
 	sys_reboot(SYS_REBOOT_WARM);
+#endif
 }
 
 static K_WORK_DEFINE(bl_work, enter_bootloader_work);
