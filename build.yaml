@@ -9,5 +9,12 @@ include:
     shield: cradio_right
     snippet: zmk-usb-logging
     cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_right.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
+  # Touch-capable settings_reset: erases NVS (clears stale BT bonds) then comes
+  # up USB-recoverable (CDC + 1200-baud touch watcher), BLE off. The plain
+  # non-recoverable settings_reset is intentionally NOT built — per the safety
+  # model every artifact must be touch-recoverable.
   - board: nice_nano_v2
     shield: settings_reset
+    snippet: zmk-usb-logging
+    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_reset.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
+    artifact-name: settings_reset_touch
