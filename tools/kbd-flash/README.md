@@ -4,6 +4,11 @@ Flash a ZMK split keyboard over USB with **no physical reset** — plug both
 halves in, run one command, walk away. Each half gets the correct firmware
 (routed by chip id) and, optionally, its Bluetooth bonds wiped.
 
+**Status:** host-triggered reset-free bootloader entry + reflash is validated on
+real nice!nano v2 hardware — 5/5 trials on the left half (immediate and settled
+touches). Right half runs identical firmware (expected to work, not yet tested).
+The host orchestrator (`kbd-flash`) is Linux-only; on macOS use `mac_touch.sh`.
+
 This pairs a small ZMK firmware feature with a host orchestrator:
 
 - **Firmware** (`../../zmk_modules/usb-bootloader-touch/`): reboots a half into
