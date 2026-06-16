@@ -66,6 +66,10 @@ source "subsys/logging/Kconfig.template.log_config"
 config ZMK_BLE_NAME_PROFILE
 	bool "Reflect the active BLE profile in the advertised device name"
 	depends on ZMK_BLE
+	# Central-only: the host pairs with the central; the peripheral advertises no
+	# host-facing name, and zmk_ble_active_profile_index() / the profile-changed
+	# event exist only on the central. On a unibody board ZMK_SPLIT is n -> allowed.
+	depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
 	help
 	  Set the BLE device name to "<CONFIG_BT_DEVICE_NAME>-P<profile>" on boot and
 	  on every active-profile change. The host's pairing list then shows which
