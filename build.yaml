@@ -18,3 +18,9 @@ include:
     snippet: zmk-usb-logging
     cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_reset.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
     artifact-name: settings_reset_touch
+  # SEPARATE boot-guard test image (boot guard is default-off in daily fw).
+  - board: nice_nano_v2
+    shield: cradio_left
+    snippet: zmk-usb-logging
+    cmake-args: -DZMK_EXTRA_MODULES=${GITHUB_WORKSPACE}/zmk_modules/usb-bootloader-touch -DEXTRA_CONF_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch_bootguard.conf -DEXTRA_DTC_OVERLAY_FILE=${GITHUB_WORKSPACE}/config/bootloader_touch.overlay
+    artifact-name: cradio_left_bootguard_test

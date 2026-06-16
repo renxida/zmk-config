@@ -13,3 +13,34 @@ jobs:
     uses: renxida/zmk-actions/.github/workflows/build-user-config.yml@main
     with:
       toolchain: zephyr
+
+  # Emit serial-DFU artifacts (.hex, and an adafruit-nrfutil .zip if it builds)
+  # alongside each .uf2 so macOS-mount-independent flashing needs no local
+  # uf2->hex conversion.
+  dfu-artifacts:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download built firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware
+          path: fw
+      - name: Convert .uf2 -> .hex (+ .zip)
+        run: |
+          set -e
+          python3 -m pip install --quiet adafruit-nrfutil || echo "nrfutil install failed; .zip will be skipped"
+          mkdir -p dfu
+          for u in fw/*.uf2; do
+            [ -e "$u" ] || continue
+            base=$(basename "$u" .uf2)
+            python3 .github/scripts/uf2_to_hex.py "$u" "dfu/$base.hex"
+            adafruit-nrfutil dfu genpkg --dev-type 0x0052 --application "dfu/$base.hex" "dfu/$base.zip" \
+              || echo "genpkg failed for $base (.hex still produced)"
+          done
+          ls -l dfu
+      - name: Upload DFU artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-dfu
+          path: dfu/
