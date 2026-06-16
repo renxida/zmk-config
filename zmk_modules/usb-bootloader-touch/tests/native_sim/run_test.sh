@@ -63,10 +63,18 @@ for _ in $(seq 1 16); do grep -q "1200-baud touch detected" "$RUNLOG" && { TRIG=
 exec 3>&-
 
 echo "== assert =="
-if [ "$TRIG" = 1 ]; then
-  echo "PASS: watcher detected 1200-baud touch and scheduled bootloader"
-  grep "touch detected\|entering UF2\|would enter" "$RUNLOG" | tail -3
-  exit 0
-else
+if [ "$TRIG" != 1 ]; then
   echo "FAIL: no trigger in log"; tail -10 "$RUNLOG"; exit 1
 fi
+echo "PASS: watcher detected 1200-baud touch and scheduled bootloader"
+grep "touch detected\|entering UF2\|would enter" "$RUNLOG" | tail -3
+
+# RECOVERABILITY contract: an early POST_KERNEL erase (mirrors zmk_settings_erase)
+# ran at boot, yet CDC enumerated and the watcher still fired. This is the
+# property that makes settings_reset_touch safe to flash.
+if grep -q "mock: settings erased" "$RUNLOG"; then
+  echo "PASS: recoverability — early POST_KERNEL erase ran, CDC+touch still live"
+else
+  echo "FAIL: recoverability — early erase init did not run (compiled out?)"; exit 1
+fi
+exit 0

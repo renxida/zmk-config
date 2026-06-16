@@ -26,6 +26,32 @@ config USB_BOOTLOADER_TOUCH_NRF_GPREGRET
 	  boot_mode subsystem. This is what the mapper ultimately does and is
 	  deterministic even when CONFIG_RETENTION_BOOT_MODE is not enabled.
 
+config USB_BOOTLOADER_TOUCH_BOOT_GUARD
+	bool "Boot-count failsafe: N rapid reboots -> UF2 bootloader"
+	depends on SOC_COMPATIBLE_NRF52X
+	default n
+	help
+	  If the firmware reboots COUNT times within WINDOW_MS (a crash loop, or
+	  the user tapping reset), enter the UF2 bootloader so the device stays
+	  recoverable over USB even if a future image is broken. Catches reboot
+	  loops, NOT a single hang or BLE-load starvation of a running firmware.
+
+	  Default OFF: it runs at every boot and is not yet hardware-validated, so
+	  it is kept OUT of the daily cradio firmware and shipped only in a separate
+	  boot-guard test image (see build.yaml). Enable explicitly to test it.
+
+if USB_BOOTLOADER_TOUCH_BOOT_GUARD
+
+config USB_BOOTLOADER_TOUCH_BOOT_GUARD_COUNT
+	int "Reboots within the window that trigger the failsafe"
+	default 8
+
+config USB_BOOTLOADER_TOUCH_BOOT_GUARD_WINDOW_MS
+	int "Window (ms): staying up this long clears the boot count"
+	default 10000
+
+endif # USB_BOOTLOADER_TOUCH_BOOT_GUARD
+
 config USB_BOOTLOADER_TOUCH_TEST_NO_REBOOT
 	bool "Detect-only (do not reboot) — for native_sim/unit tests"
 	default n
