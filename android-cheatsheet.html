@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cradio + Android Cheatsheet</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --fg: #e6e6e6;
+    --dim: #9aa3ad;
+    --accent: #7cc4ff;
+    --kbd-bg: #222831;
+    --kbd-bd: #3a4350;
+    --row: #161a21;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.45 -apple-system, system-ui, sans-serif;
+  }
+  main { padding: 16px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  h2 {
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin: 22px 0 8px;
+    border-bottom: 1px solid #2a3340;
+    padding-bottom: 4px;
+  }
+  p.sub { color: var(--dim); margin: 0 0 16px; font-size: 0.85rem; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 9px 10px;
+    background: var(--row);
+    border-radius: 6px;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+  }
+  .action { color: var(--fg); font-weight: 500; }
+  .keys { display: flex; gap: 4px; flex-wrap: wrap; }
+  kbd {
+    background: var(--kbd-bg);
+    border: 1px solid var(--kbd-bd);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font: 600 0.78rem ui-monospace, monospace;
+    color: #d8e3ef;
+    white-space: nowrap;
+  }
+  kbd.combo { background: #2a3a2e; border-color: #3d5544; color: #b9e0c6; }
+  kbd.thumb { background: #3a2a3a; border-color: #553d55; color: #e0b9e0; }
+  .note {
+    background: #1a1f28;
+    border-left: 3px solid var(--accent);
+    padding: 8px 10px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--dim);
+    margin: 10px 0 0;
+    overflow-wrap: anywhere;
+  }
+  .legend {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    font-size: 0.75rem; color: var(--dim);
+    margin-bottom: 12px;
+  }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cradio &rarr; Samsung S23</h1>
+  <p class="sub">Colemak-DH, 34 keys, BLE</p>
+  <div class="legend">
+    <span><kbd>plain</kbd> keycode</span>
+    <span><kbd class="combo">A+B</kbd> combo</span>
+    <span><kbd class="thumb">Thumb</kbd> hold</span>
+  </div>
+
+  <h2>Pair</h2>
+  <ul>
+    <li><span class="action">Activate Sys layer</span><span class="keys"><kbd class="thumb">L-inner</kbd>+<kbd class="thumb">R-inner</kbd></span></li>
+    <li><span class="action">Select BT slot 0&ndash;3</span><span class="keys"><kbd>Q</kbd> <kbd>W</kbd> <kbd>F</kbd> <kbd>P</kbd></span></li>
+    <li><span class="action">Clear current slot</span><span class="keys"><kbd>B</kbd></span></li>
+  </ul>
+  <p class="note">On phone: Bluetooth settings, pair <code>SS-&lt;hash&gt;</code>, set as Input device.</p>
+
+  <h2>Phone setup (one-time)</h2>
+  <ul>
+    <li><span class="action">Hide on-screen kbd</span><span class="keys"><kbd>Settings</kbd></span></li>
+    <li><span class="action">Layout: English (US)</span><span class="keys"><kbd>Settings</kbd></span></li>
+    <li><span class="action">Keyboard cursor on</span><span class="keys"><kbd>A11y</kbd></span></li>
+  </ul>
+
+  <h2>Navigation</h2>
+  <ul>
+    <li><span class="action">Home</span><span class="keys"><kbd>Cmd</kbd>+<kbd>Enter</kbd></span></li>
+    <li><span class="action">Back</span><span class="keys"><kbd class="combo">Q+W</kbd> (Esc)</span></li>
+    <li><span class="action">Recents</span><span class="keys"><kbd>Cmd</kbd>+<kbd class="combo">S+F</kbd></span></li>
+    <li><span class="action">App switch</span><span class="keys"><kbd>Alt</kbd>+<kbd class="combo">S+F</kbd></span></li>
+    <li><span class="action">Notifications</span><span class="keys"><kbd>Cmd</kbd>+<kbd>N</kbd></span></li>
+    <li><span class="action">Search / launch app</span><span class="keys"><kbd>Cmd</kbd>+<kbd>F</kbd></span></li>
+  </ul>
+
+  <h2>Window</h2>
+  <ul>
+    <li><span class="action">Snap left / right</span><span class="keys"><kbd>Cmd</kbd>+<kbd>&larr;</kbd>/<kbd>&rarr;</kbd></span></li>
+    <li><span class="action">Max / min</span><span class="keys"><kbd>Cmd</kbd>+<kbd>&uarr;</kbd>/<kbd>&darr;</kbd></span></li>
+  </ul>
+
+  <h2>Screenshot</h2>
+  <ul>
+    <li><span class="action">Selection</span><span class="keys"><kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd></span></li>
+  </ul>
+
+  <h2>Mouse layer</h2>
+  <ul>
+    <li><span class="action">Toggle mouse</span><span class="keys"><kbd class="combo">F+W</kbd></span></li>
+    <li><span class="action">Move</span><span class="keys"><kbd>N</kbd> <kbd>E</kbd> <kbd>I</kbd> <kbd>O</kbd></span></li>
+    <li><span class="action">L / R / M click</span><span class="keys"><kbd class="thumb">L-thumbs</kbd> <kbd>H</kbd></span></li>
+    <li><span class="action">Scroll</span><span class="keys"><kbd>L</kbd> <kbd>U</kbd> <kbd>Y</kbd></span></li>
+    <li><span class="action">Exit</span><span class="keys"><kbd class="thumb">R-outer</kbd></span></li>
+  </ul>
+
+  <h2>Text edit</h2>
+  <ul>
+    <li><span class="action">Cut / Copy / Paste</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>X/C/V</kbd></span></li>
+    <li><span class="action">Select all / Undo</span><span class="keys"><kbd>Ctrl</kbd>+<kbd>A/Z</kbd></span></li>
+    <li><span class="action">Word del back/fwd</span><span class="keys">long-tap NAV bspc/del</span></li>
+  </ul>
+</main>
+</body>
+</html>
