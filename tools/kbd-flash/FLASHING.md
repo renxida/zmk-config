@@ -66,3 +66,32 @@ after reflashing one half). Fix = wipe bonds on **both** halves, then reflash:
   flash the wrong side and break pairing.
 - The host BLE bond (keyboard↔computer) is **separate** from the split bond; if the
   host connection is flaky after a fix, forget+re-add the keyboard on the host.
+
+## 5. Diagnose BT / battery / split issues — `kbd_doctor.py`
+One tool for autonomous debugging (macOS). BLE features need the bleak venv:
+```bash
+python3 -m venv ~/.venv-ble && ~/.venv-ble/bin/pip install bleak   # one-time
+```
+```bash
+cd tools/kbd-flash/macos
+~/.venv-ble/bin/python3 kbd_doctor.py health [pair]   # full report (enum+scan+split+battery)
+python3            kbd_doctor.py enum                 # devices + app/BOOTLOADER state (no bleak)
+~/.venv-ble/bin/python3 kbd_doctor.py scan [secs]     # BLE names by RSSI, flags keyboards
+python3            kbd_doctor.py splitlog <pair|serial> [secs]  # central CDC -> split verdict
+~/.venv-ble/bin/python3 kbd_doctor.py battery [name]  # read BLE Battery Service
+python3            kbd_doctor.py flash <pair-side> <uf2>  # touch->bootloader->flash->verify (one-shot)
+```
+- **`flash`** is the robust one-shot: touches the half to the bootloader, **waits for
+  the flash channel to enumerate** (fixes the serial-DFU auto-touch race), copies via
+  MSC if NICENANO mounts else falls back to serial DFU, then waits for the app. e.g.
+  `kbd_doctor.py flash vega-left ~/kbd-fw-pairs/firmware-…/vega_left.uf2`.
+- **`splitlog`** verdict distinguishes the real fault (**err 2** = bond mismatch between
+  halves) from benign host churn (**err 9** / reason 0x13 = an unbonded BLE client, e.g.
+  a battery read, connecting then dropping — NOT a split problem). `[SUBSCRIBED]` only
+  appears near boot; capture right after a replug/reflash.
+- **`battery`** CONNECTS over BLE (reads at security level 1, no pairing dialog) — only
+  the **central/left** level is exposed; the right half needs split-battery firmware.
+  The % is a voltage estimate and **reads high while on USB**. Connecting briefly churns
+  the central (ZMK drops the unbonded client) — harmless on a spare, avoid mid-use.
+- All USB/volume enumeration is in `kbd_lib.py` (pure stdlib, zsh-glob-safe). Known chip
+  serials for both pairs live in `kbd_lib.KNOWN`.
