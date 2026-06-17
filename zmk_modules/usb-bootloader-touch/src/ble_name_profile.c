@@ -33,9 +33,14 @@ static void apply_name(void) {
     snprintf(buf, sizeof(buf), "%s-P%d", CONFIG_BT_DEVICE_NAME, idx);
     const char *cur = bt_get_name();
     if (cur && strcmp(cur, buf) == 0) {
-        return; /* already correct — avoid a redundant NVS write */
+        return; /* already correct — avoid a redundant NVS write + adv restart */
     }
-    int rc = bt_set_name(buf);
+    /* Must use ZMK's setter, not bare bt_set_name(): ZMK advertises with
+     * BT_LE_ADV_OPT_USE_NAME, so the name is baked into the AD packet at
+     * adv-start. zmk_ble_set_device_name() does bt_set_name() THEN stops and
+     * restarts advertising (update_advertising), so the scanner actually sees
+     * the new name. Bare bt_set_name() updates only the GAP name -> stale AD. */
+    int rc = zmk_ble_set_device_name(buf);
     LOG_WRN("BLE name set to '%s' (was '%s', rc %d)", buf, cur ? cur : "(null)", rc);
 }
 
