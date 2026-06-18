@@ -201,8 +201,11 @@ async def _battery(name, secs):
             for svc in cli.services:
                 for ch in svc.characteristics:
                     if ch.uuid.lower() == BAS_LEVEL_UUID and "read" in ch.properties:
-                        val = await cli.read_gatt_char(ch.uuid)
-                        results.append((svc.handle, int(val[0])))
+                        # read by the characteristic OBJECT, not the UUID string:
+                        # split-battery exposes >1 BAS (0x2A19), so the UUID is
+                        # ambiguous and bleak requires the handle/object.
+                        val = await cli.read_gatt_char(ch)
+                        results.append((ch.handle, int(val[0])))
             return (nm, addr, results), None
     except Exception as e:
         return None, f"connect/read failed for {nm} ({addr}): {e!r}"
@@ -222,8 +225,12 @@ def cmd_battery(args):
         print(f"  connected to {nm} ({addr}) but no readable Battery Level char "
               f"(BAS absent or encryption-gated)")
         return
-    for handle, pct in levels:
-        print(f"  {nm}: battery {pct}%  (service handle {handle})")
+    levels.sort()  # by handle; the lower-handle BAS is the central's own
+    for i, (handle, pct) in enumerate(levels):
+        who = "central/left" if i == 0 else f"peripheral #{i} (proxied)"
+        print(f"  {nm}: battery {pct}%  ({who}, char handle {handle})")
+    if len(levels) > 1:
+        print(f"  ({len(levels)} Battery Service instances — split-battery proxy is working)")
     print("  note: % is a voltage estimate; reads high while on USB power.")
 
 
