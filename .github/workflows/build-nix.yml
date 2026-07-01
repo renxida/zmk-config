@@ -22,9 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (for the uf2->hex script)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download built firmware
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: firmware
           path: fw
@@ -42,7 +42,7 @@ jobs:
           done
           ls -l dfu
       - name: Upload DFU artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: firmware-dfu
           path: dfu/
